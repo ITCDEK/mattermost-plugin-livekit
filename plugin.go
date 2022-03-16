@@ -14,6 +14,6 @@ var manifestString string
 var Manifest model.Manifest
 
 func init() {
-	//Hi
+	//Hi!
 	_ = json.NewDecoder(strings.NewReader(manifestString)).Decode(&Manifest)
 }

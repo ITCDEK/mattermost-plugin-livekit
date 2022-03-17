@@ -1,0 +1,163 @@
+{
+    "admin": {
+        "listen": "172.16.42.228:2022"
+    },
+    "logging": {
+        "logs": {
+            "default": {"level": "INFO"}
+        }
+    },
+    "storage": {
+        "module": "file_system",
+        "root": "/opt/caddy"
+    },
+    "apps": {
+        "tls": {
+            "certificates": {
+                "load_files":[{
+                    "certificate": "/opt/caddy/cdek.ru.crt",
+                    "key": "/opt/caddy/cdek.ru.key"
+                }],
+                "automate": ["livekit.cdek.ru", "turn.cdek.ru", "dev-talk.cdek.ru"]
+            },
+            "automation": {
+                "policies": [
+                    {
+                        "subjects": ["dev-talk.cdek.ru"],
+                        "issuers": [
+                            {
+                                "module": "acme",
+                                "email": "shershunov.d@cdek.ru",
+                                "challenges": {
+                                    "bind_host": "172.16.42.228"
+                                }
+                            },{
+                                "module": "zerossl",
+                                "email": "shershunov.d@cdek.ru",
+                                "challenges": {
+                                    "bind_host": "172.16.42.228"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "http": {
+            "https_port": 1337, //https://github.com/mholt/caddy-l4/issues/39
+            "servers": {
+                "mattermost": {
+                    "listen": [ "tcp4/0.0.0.0:443" ],
+                    "routes": [
+                        {
+                            "match": [{ "host" : ["dev-talk.cdek.ru"] }],
+                            "handle": [
+                                {
+                                    "handler" : "reverse_proxy",
+                                    "upstreams": [ { "dial" : "172.16.42.228:8065" }],
+                                    "headers": {
+                                        "request": {
+                                            "set" : {
+                                                "Host": ["{http.reverse_proxy.upstream.host}"]
+                                            }
+                                        }
+                                    },
+                                    "transport": {
+                                        "protocol": "http",
+                                        "tls": {}
+                                    }
+                                }
+                            ],
+                            "terminal": true
+                        }
+                    ]
+                },
+                "web": {
+                    "listen": ["172.16.42.228:80"],
+                    "routes": [
+                        {
+                            "handle": [
+                                {
+                                    "handler" : "static_response",
+                                    "headers": {
+                                        "Location": ["https://{http.request.host}{http.request.uri}"]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        },
+        "layer4": {
+            "servers": {
+                "main": {
+                    "listen": ["172.16.42.228:443"],
+                    "routes": [
+                        {
+                            "match": [
+                                {
+                                    "tls": {"sni": ["dev-talk.cdek.ru"]}
+                                }
+                            ],
+                            "handle": [
+                                {
+                                    "handler": "tls"
+                                },
+                                {
+                                    "handler": "proxy",
+                                    "upstreams": [
+                                        {
+                                            "dial": ["172.16.42.228:8065"]
+                                        }
+                                    ],
+                                    "proxy_protocol": "v2"
+                                }
+                            ]
+                        }, {
+                            "match": [
+                                {
+                                    "tls": {"sni": ["livekit.cdek.ru"]}
+                                }
+                            ],
+                            "handle": [
+                                {
+                                    "handler": "tls",
+                                    "connection_policies": [
+                                        {"alpn": ["http/1.1"]}
+                                    ]
+                                }, 
+                                {
+                                    "handler": "proxy",
+                                    "upstreams": [
+                                        {
+                                            "dial": ["172.16.42.228:7880"]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }, {
+                            "match": [
+                                {
+                                    "tls": {"sni": ["turn.cdek.ru"]}
+                                }
+                            ],
+                            "handle": [
+                                {
+                                    "handler": "tls"
+                                }, 
+                                {
+                                    "handler": "proxy",
+                                    "upstreams": [
+                                        {
+                                            "dial": ["172.16.42.228:5349"]
+                                        }
+                                    ]
+                                }
+                            ]}
+                    ]
+                }
+            }
+        }
+    }
+}

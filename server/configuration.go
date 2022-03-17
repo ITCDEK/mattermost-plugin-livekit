@@ -17,6 +17,10 @@ import (
 //
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
+type LivekitSettings struct{}
+
+type TurnSettings struct{}
+
 type configuration struct {
 	LiveKitString string
 	TurnString    string

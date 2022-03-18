@@ -58,12 +58,12 @@ func init() {
 				HelpText:    "The LiveKit API key to create user credentials",
 			},
 			{
-				DisplayName: "",
-				Key:         "",
+				DisplayName: "Server #1",
+				Key:         "Server1",
 				Type:        "text",
 				Default:     "",
 				Placeholder: "",
-				HelpText:    "",
+				HelpText:    "JSON-formatted settings, see plugin documentation on GitHub",
 			},
 		},
 	}

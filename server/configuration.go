@@ -17,14 +17,20 @@ import (
 //
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
-type LivekitSettings struct{}
-
-type TurnSettings struct{}
+type livekitSettings struct {
+	ServerSecure bool
+	ServerName   string
+	ServerPort   int
+	ServerSecret string
+	TurnSecure   bool
+	TurnName     string
+	TurnPort     int
+	TurnUDP      int
+}
 
 type configuration struct {
-	LiveKitString string
-	TurnString    string
-	SecretString  string
+	Servers []livekitSettings
+	Server1 string
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -37,15 +43,15 @@ func (c *configuration) Clone() *configuration {
 // getConfiguration retrieves the active configuration under lock, making it safe to use
 // concurrently. The active configuration may change underneath the client of this method, but
 // the struct returned by this API call is considered immutable.
-func (p *Plugin) getConfiguration() *configuration {
-	p.configurationLock.RLock()
-	defer p.configurationLock.RUnlock()
+func (kit *LivePlugin) getConfiguration() *configuration {
+	kit.configurationLock.RLock()
+	defer kit.configurationLock.RUnlock()
 
-	if p.configuration == nil {
+	if kit.configuration == nil {
 		return &configuration{}
 	}
 
-	return p.configuration
+	return kit.configuration
 }
 
 // setConfiguration replaces the active configuration under lock.
@@ -57,11 +63,11 @@ func (p *Plugin) getConfiguration() *configuration {
 // This method panics if setConfiguration is called with the existing configuration. This almost
 // certainly means that the configuration was modified without being cloned and may result in
 // an unsafe access.
-func (p *Plugin) setConfiguration(configuration *configuration) {
-	p.configurationLock.Lock()
-	defer p.configurationLock.Unlock()
+func (kit *LivePlugin) setConfiguration(configuration *configuration) {
+	kit.configurationLock.Lock()
+	defer kit.configurationLock.Unlock()
 
-	if configuration != nil && p.configuration == configuration {
+	if configuration != nil && kit.configuration == configuration {
 		// Ignore assignment if the configuration struct is empty. Go will optimize the
 		// allocation for same to point at the same memory address, breaking the check
 		// above.
@@ -72,19 +78,21 @@ func (p *Plugin) setConfiguration(configuration *configuration) {
 		panic("setConfiguration called with the existing configuration")
 	}
 
-	p.configuration = configuration
+	kit.configuration = configuration
 }
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
-func (p *Plugin) OnConfigurationChange() error {
+func (kit *LivePlugin) OnConfigurationChange() error {
 	var configuration = new(configuration)
 
 	// Load the public configuration fields from the Mattermost server configuration.
-	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
+	err := kit.API.LoadPluginConfiguration(configuration)
+	if err == nil {
+		var server livekitSettings
+		configuration.Servers = append(configuration.Servers, server)
+		kit.setConfiguration(configuration)
+		return nil
+	} else {
 		return errors.Wrap(err, "failed to load plugin configuration")
 	}
-
-	p.setConfiguration(configuration)
-
-	return nil
 }

@@ -18,14 +18,15 @@ import (
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type livekitSettings struct {
-	ServerSecure bool
-	ServerName   string
-	ServerPort   int
-	ServerSecret string
-	TurnSecure   bool
-	TurnName     string
-	TurnPort     int
-	TurnUDP      int
+	Secure     bool
+	Host       string
+	Port       int
+	ApiKey     string
+	ApiSecret  string
+	TurnSecure bool
+	TurnName   string
+	TurnPort   int
+	TurnUDP    int
 }
 
 type configuration struct {

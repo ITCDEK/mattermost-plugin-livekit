@@ -1,13 +1,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
 
+	"github.com/livekit/protocol/livekit"
+	kitSDK "github.com/livekit/server-sdk-go"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
 )
+
+// References
+// https://github.com/mattermost/mattermost-plugin-jitsi
+// https://github.com/mattermost/mattermost-plugin-zoom
+// https://github.com/streamer45/mattermost-plugin-voice
+// https://github.com/niklabh/mattermost-plugin-webrtc-video
+// https://github.com/Kopano-dev/mattermost-plugin-kopanowebmeetings
+// https://github.com/blindsidenetworks/mattermost-plugin-bigbluebutton
 
 // LivePlugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type LivePlugin struct {
@@ -20,6 +31,7 @@ type LivePlugin struct {
 	// setConfiguration for usage.
 	configuration *configuration
 	bot           *model.Bot
+	master        *kitSDK.RoomServiceClient
 }
 
 func (kit *LivePlugin) OnActivate() error {
@@ -48,11 +60,20 @@ func (kit *LivePlugin) OnActivate() error {
 		kit.bot = bot
 	}
 
+	server := kit.configuration.Servers[0]
+	kit.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
+
 	return nil
 }
 
 func (kit *LivePlugin) OnDeactivate() error {
 	return nil
+}
+
+func (kit *LivePlugin) newRoom(roomName string) error {
+	room, err := kit.master.CreateRoom(context.Background(), &livekit.CreateRoomRequest{Name: roomName})
+	fmt.Println(room.CreationTime)
+	return err
 }
 
 func (kit *LivePlugin) compileSlashCommand() (*model.Command, error) {
@@ -64,7 +85,7 @@ func (kit *LivePlugin) compileSlashCommand() (*model.Command, error) {
 	command := &model.Command{
 		Trigger:          "call",
 		AutoComplete:     true,
-		AutoCompleteDesc: "Start a Jitsi meeting in current channel. Other available commands: start, help, settings",
+		AutoCompleteDesc: "Start a LiveKit meeting in current channel. Other available commands: start, help, settings",
 		AutoCompleteHint: "[command]",
 		AutocompleteData: acData,
 		// AutocompleteIconData: iconData,

@@ -24,8 +24,8 @@ import (
 // https://github.com/blindsidenetworks/mattermost-plugin-bigbluebutton
 // https://developers.mattermost.com/integrate/plugins/server/reference/
 
-// LivePlugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
-type LivePlugin struct {
+// LiveKitPlugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
+type LiveKitPlugin struct {
 	plugin.MattermostPlugin
 
 	// configurationLock synchronizes access to the configuration.
@@ -38,18 +38,18 @@ type LivePlugin struct {
 	master        *kitSDK.RoomServiceClient
 }
 
-func (kp *LivePlugin) OnActivate() error {
-	kp.API.LogInfo("Activating...")
-	config := kp.getConfiguration()
+func (lkp *LiveKitPlugin) OnActivate() error {
+	lkp.API.LogInfo("Activating...")
+	config := lkp.getConfiguration()
 	// validate config
-	kp.configuration = config
+	lkp.configuration = config
 
-	command, err := kp.compileSlashCommand()
+	command, err := lkp.compileSlashCommand()
 	if err != nil {
 		return err
 	}
 
-	if err = kp.API.RegisterCommand(command); err != nil {
+	if err = lkp.API.RegisterCommand(command); err != nil {
 		return err
 	}
 
@@ -59,18 +59,17 @@ func (kp *LivePlugin) OnActivate() error {
 		Description: "A bot account created by the LiveKit plugin",
 	}
 
-	bot, ae := kp.API.CreateBot(liveBot)
+	bot, ae := lkp.API.CreateBot(liveBot)
 	if ae == nil {
-		kp.bot = bot
+		lkp.bot = bot
 	}
 
-	server := kp.configuration.Servers[0]
-	kp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
-
+	server := lkp.configuration.Servers[0]
+	lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
 	return nil
 }
 
-func (kp *LivePlugin) OnDeactivate() error {
+func (lkp *LiveKitPlugin) OnDeactivate() error {
 	return nil
 }
 
@@ -87,11 +86,11 @@ func getJoinToken(apiKey, apiSecret, room, identity string) (string, error) {
 	return at.ToJWT()
 }
 
-func (kp *LivePlugin) newRoom(roomName, channelID, rootID, topic string) error {
-	room, err := kp.master.CreateRoom(context.Background(), &livekit.CreateRoomRequest{Name: roomName})
-	kp.API.LogInfo("room created at", room.CreationTime)
+func (lkp *LiveKitPlugin) newRoom(userID, channelID, rootID, topic string) error {
+	room, err := lkp.master.CreateRoom(context.Background(), &livekit.CreateRoomRequest{Name: topic, Metadata: channelID, EmptyTimeout: 300})
+	lkp.API.LogInfo("room created at", room.CreationTime)
 	post := &model.Post{
-		UserId:    kp.bot.UserId,
+		UserId:    lkp.bot.UserId,
 		ChannelId: channelID,
 		RootId:    rootID,
 		Message:   "I have started a meeting",
@@ -109,15 +108,16 @@ func (kp *LivePlugin) newRoom(roomName, channelID, rootID, topic string) error {
 		},
 	}
 
-	newRoomPost, appErr := kp.API.CreatePost(post)
-	kp.API.LogInfo("room post created with ID =", newRoomPost.Id)
+	newRoomPost, appErr := lkp.API.CreatePost(post)
+	lkp.API.LogInfo("room post created with ID =", newRoomPost.Id)
 	if appErr != nil {
 		return appErr
 	}
 	return err
 }
 
-func (kp *LivePlugin) compileSlashCommand() (*model.Command, error) {
+func (lkp *LiveKitPlugin) compileSlashCommand() (*model.Command, error) {
+	// https://developers.mattermost.com/integrate/admin-guide/admin-slash-commands/
 	acData := model.NewAutocompleteData("call", "[command]", "Start a LiveKit meeting in current channel. Other available commands: start, help, settings")
 	start := model.NewAutocompleteData("start", "[topic]", "Start a new meeting in the current channel")
 	start.AddTextArgument("(optional) The topic of the new meeting", "[topic]", "")
@@ -135,7 +135,7 @@ func (kp *LivePlugin) compileSlashCommand() (*model.Command, error) {
 }
 
 // ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
-func (kp *LivePlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
+func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	type roomRequest struct {
 		ChannelID string `json:"channel_id"`
 		Personal  bool   `json:"personal"`
@@ -154,6 +154,40 @@ func (kp *LivePlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *htt
 		case "/webhook":
 			fmt.Fprint(w, "Hello, world! This hook is not implemented yet.")
 		case "/room":
+			if _, err := lkp.API.GetChannelMember(rr.ChannelID, userID); err != nil {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			channel, appErr := lkp.API.GetChannel(rr.ChannelID)
+			if appErr != nil {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			if channel.Type == model.ChannelTypeDirect || channel.Type == model.ChannelTypeGroup {
+				// meetingID = generatePersonalMeetingName(user.Username)
+				// meetingTopic = p.b.LocalizeWithConfig(l, &i18n.LocalizeConfig{
+				// 	DefaultMessage: &i18n.Message{
+				// 		ID:    "jitsi.start_meeting.personal_meeting_topic",
+				// 		Other: "{{.Name}}'s Personal Meeting",
+				// 	},
+				// 	TemplateData: map[string]string{"Name": user.GetDisplayName(model.SHOW_NICKNAME_FULLNAME)},
+				// })
+				// meetingPersonal = true
+			} else {
+				// team, teamErr := lkp.API.GetTeam(channel.TeamId)
+				// if teamErr != nil {
+				// 	return "", teamErr
+				// }
+				// meetingTopic = p.b.LocalizeWithConfig(l, &i18n.LocalizeConfig{
+				// 	DefaultMessage: &i18n.Message{
+				// 		ID:    "jitsi.start_meeting.channel_meeting_topic",
+				// 		Other: "{{.ChannelName}} Channel Meeting",
+				// 	},
+				// 	TemplateData: map[string]string{"ChannelName": channel.DisplayName},
+				// })
+				// meetingID = generateTeamChannelName(team.Name, channel.Name)
+			}
+			// lkp.API.SendEphemeralPost(lkp.bot.UserId, &model.Post{})
 			fmt.Fprint(w, "Hello, world! The new room feature is not implemented yet.")
 		case "/token":
 			fmt.Fprint(w, "Hello, world! Token feature is not implemented yet.")

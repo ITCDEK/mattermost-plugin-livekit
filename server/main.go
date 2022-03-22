@@ -5,5 +5,5 @@ import (
 )
 
 func main() {
-	plugin.ClientMain(&LivePlugin{})
+	plugin.ClientMain(&LiveKitPlugin{})
 }

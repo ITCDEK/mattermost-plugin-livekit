@@ -44,7 +44,7 @@ func (c *configuration) Clone() *configuration {
 // getConfiguration retrieves the active configuration under lock, making it safe to use
 // concurrently. The active configuration may change underneath the client of this method, but
 // the struct returned by this API call is considered immutable.
-func (kit *LivePlugin) getConfiguration() *configuration {
+func (kit *LiveKitPlugin) getConfiguration() *configuration {
 	kit.configurationLock.RLock()
 	defer kit.configurationLock.RUnlock()
 
@@ -64,7 +64,7 @@ func (kit *LivePlugin) getConfiguration() *configuration {
 // This method panics if setConfiguration is called with the existing configuration. This almost
 // certainly means that the configuration was modified without being cloned and may result in
 // an unsafe access.
-func (kit *LivePlugin) setConfiguration(configuration *configuration) {
+func (kit *LiveKitPlugin) setConfiguration(configuration *configuration) {
 	kit.configurationLock.Lock()
 	defer kit.configurationLock.Unlock()
 
@@ -83,7 +83,7 @@ func (kit *LivePlugin) setConfiguration(configuration *configuration) {
 }
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
-func (kit *LivePlugin) OnConfigurationChange() error {
+func (kit *LiveKitPlugin) OnConfigurationChange() error {
 	var configuration = new(configuration)
 
 	// Load the public configuration fields from the Mattermost server configuration.

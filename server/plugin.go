@@ -41,18 +41,10 @@ type LiveKitPlugin struct {
 func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.API.LogInfo("Activating...")
 	config := lkp.getConfiguration()
-	// validate config
+	// validate config here
 	lkp.configuration = config
 
-	command, err := lkp.compileSlashCommand()
-	if err != nil {
-		return err
-	}
-
-	if err = lkp.API.RegisterCommand(command); err != nil {
-		return err
-	}
-
+	var err error
 	liveBot := &model.Bot{
 		Username:    "livekit",
 		DisplayName: "Live Bot",
@@ -62,59 +54,28 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	bot, ae := lkp.API.CreateBot(liveBot)
 	if ae == nil {
 		lkp.bot = bot
+		command, err := lkp.compileSlashCommand()
+		if err == nil {
+			err = lkp.API.RegisterCommand(command)
+			if err == nil {
+				server := lkp.configuration.Servers[0]
+				lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
+				return nil
+			}
+		}
+	} else {
+		err = fmt.Errorf(ae.Error())
 	}
 
-	server := lkp.configuration.Servers[0]
-	lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
-	return nil
+	return err
 }
 
 func (lkp *LiveKitPlugin) OnDeactivate() error {
 	return nil
 }
 
-func getJoinToken(apiKey, apiSecret, room, identity string) (string, error) {
-	at := auth.NewAccessToken(apiKey, apiSecret)
-	grant := &auth.VideoGrant{
-		RoomJoin: true,
-		Room:     room,
-	}
-	at.AddGrant(grant).
-		SetIdentity(identity).
-		SetValidFor(time.Hour)
-
-	return at.ToJWT()
-}
-
-func (lkp *LiveKitPlugin) newRoom(userID, channelID, rootID, topic string) error {
-	room, err := lkp.master.CreateRoom(context.Background(), &livekit.CreateRoomRequest{Name: topic, Metadata: channelID, EmptyTimeout: 300})
-	lkp.API.LogInfo("room created at", room.CreationTime)
-	post := &model.Post{
-		UserId:    lkp.bot.UserId,
-		ChannelId: channelID,
-		RootId:    rootID,
-		Message:   "I have started a meeting",
-		Type:      "custom_zoom",
-		Props: map[string]interface{}{
-			"room_capacity": room.MaxParticipants,
-			"room_name":     room.Name,
-			// "meeting_link":             meetingURL,
-			// "meeting_status":           zoom.WebhookStatusStarted,
-			// "meeting_personal":         false,
-			// "meeting_topic":            topic,
-			// "meeting_creator_username": creator.Username,
-			// "meeting_provider":         zoomProviderName,
-			// "attachments":              []*model.SlackAttachment{&slackAttachment},
-		},
-	}
-
-	newRoomPost, appErr := lkp.API.CreatePost(post)
-	lkp.API.LogInfo("room post created with ID =", newRoomPost.Id)
-	if appErr != nil {
-		return appErr
-	}
-	return err
-}
+// func getJoinToken(apiKey, apiSecret, room, identity string) (string, error) {}
+// func (lkp *LiveKitPlugin) newRoom(userID, channelID, rootID, topic string) error {}
 
 func (lkp *LiveKitPlugin) compileSlashCommand() (*model.Command, error) {
 	// https://developers.mattermost.com/integrate/admin-guide/admin-slash-commands/
@@ -136,67 +97,123 @@ func (lkp *LiveKitPlugin) compileSlashCommand() (*model.Command, error) {
 
 // ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
 func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
-	type roomRequest struct {
-		ChannelID string `json:"channel_id"`
-		Personal  bool   `json:"personal"`
-		Topic     string `json:"topic"`
-		MeetingID int    `json:"meeting_id"`
-	}
 	userID := r.Header.Get("Mattermost-User-ID")
 	if userID == "" {
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
-	var rr roomRequest
-	err := json.NewDecoder(r.Body).Decode(&rr)
-	if err == nil {
-		switch r.URL.Path {
-		case "/webhook":
-			fmt.Fprint(w, "Hello, world! This hook is not implemented yet.")
-		case "/room":
-			if _, err := lkp.API.GetChannelMember(rr.ChannelID, userID); err != nil {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
+	switch r.URL.Path {
+	case "/webhook":
+		fmt.Fprint(w, "Hello, world! This hook is not implemented yet.")
+	case "/room":
+		// https://stackoverflow.com/questions/57096382/response-from-interactive-button-post-is-ignored-in-mattermost
+		roomRequest := struct {
+			ChannelID string `json:"channel_id"`
+			PartyOf   int    `json:"party"`
+			Personal  bool   `json:"personal"`
+			Topic     string `json:"topic"`
+			RootID    string `json:"root_id"`
+		}{}
+		err := json.NewDecoder(r.Body).Decode(&roomRequest)
+		if err == nil {
+			channel, appErr := lkp.API.GetChannel(roomRequest.ChannelID)
+			if appErr == nil {
+				member, appErr := lkp.API.GetChannelMember(channel.Id, userID)
+				if appErr == nil {
+					info := fmt.Sprintf("User %s requested new live room for channel %s", member.UserId, member.ChannelId)
+					lkp.API.LogInfo(info)
+					room, err := lkp.master.CreateRoom(
+						context.Background(),
+						&livekit.CreateRoomRequest{
+							Name:         roomRequest.Topic,
+							Metadata:     roomRequest.ChannelID,
+							EmptyTimeout: 300,
+						},
+					)
+					if err == nil {
+						lkp.API.LogInfo("room created at", room.CreationTime)
+						post := &model.Post{
+							UserId:    lkp.bot.UserId,
+							ChannelId: channel.Id,
+							RootId:    roomRequest.RootID,
+							Message:   "I have started a meeting",
+							Type:      "custom_livekit",
+							Props: map[string]interface{}{
+								"room_capacity": room.MaxParticipants,
+								"room_name":     room.Name,
+								"room_sid":      room.Sid,
+								"room_host":     member.UserId,
+								"room_server":   0,
+								// "meeting_status":           zoom.WebhookStatusStarted,
+								// "meeting_personal":         false,
+								// "attachments":              []*model.SlackAttachment{&slackAttachment},
+							},
+						}
+						// lkp.API.SendEphemeralPost(lkp.bot.UserId, post)
+						newRoomPost, appErr := lkp.API.CreatePost(post)
+						if appErr == nil {
+							lkp.API.LogInfo("room post created with ID =", newRoomPost.Id)
+							http.Error(w, "OK", http.StatusOK)
+						} else {
+							lkp.API.LogInfo(appErr.DetailedError)
+							http.Error(w, appErr.DetailedError, http.StatusInternalServerError)
+						}
+						return
+					}
+				}
 			}
-			channel, appErr := lkp.API.GetChannel(rr.ChannelID)
-			if appErr != nil {
-				http.Error(w, "Forbidden", http.StatusForbidden)
-				return
-			}
-			if channel.Type == model.ChannelTypeDirect || channel.Type == model.ChannelTypeGroup {
-				// meetingID = generatePersonalMeetingName(user.Username)
-				// meetingTopic = p.b.LocalizeWithConfig(l, &i18n.LocalizeConfig{
-				// 	DefaultMessage: &i18n.Message{
-				// 		ID:    "jitsi.start_meeting.personal_meeting_topic",
-				// 		Other: "{{.Name}}'s Personal Meeting",
-				// 	},
-				// 	TemplateData: map[string]string{"Name": user.GetDisplayName(model.SHOW_NICKNAME_FULLNAME)},
-				// })
-				// meetingPersonal = true
-			} else {
-				// team, teamErr := lkp.API.GetTeam(channel.TeamId)
-				// if teamErr != nil {
-				// 	return "", teamErr
-				// }
-				// meetingTopic = p.b.LocalizeWithConfig(l, &i18n.LocalizeConfig{
-				// 	DefaultMessage: &i18n.Message{
-				// 		ID:    "jitsi.start_meeting.channel_meeting_topic",
-				// 		Other: "{{.ChannelName}} Channel Meeting",
-				// 	},
-				// 	TemplateData: map[string]string{"ChannelName": channel.DisplayName},
-				// })
-				// meetingID = generateTeamChannelName(team.Name, channel.Name)
-			}
-			// lkp.API.SendEphemeralPost(lkp.bot.UserId, &model.Post{})
-			fmt.Fprint(w, "Hello, world! The new room feature is not implemented yet.")
-		case "/token":
-			fmt.Fprint(w, "Hello, world! Token feature is not implemented yet.")
-			// kit.API.LogInfo()
-		default:
-			http.NotFound(w, r)
+			http.Error(w, "Forbidden", http.StatusForbidden)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
+	case "/join":
+		var tokenRequest map[string]string
+		err := json.NewDecoder(r.Body).Decode(&tokenRequest)
+		roomName, found := tokenRequest["roomID"]
+		if err == nil && found {
+			info := fmt.Sprintf("User %s requested new access token for [%s]", userID, roomName)
+			lkp.API.LogInfo(info)
+			// options := livekit.ListRoomsRequest{Names: []string{}}
+			// listing, err := lkp.master.ListRooms(context.Background(), &options)
+			// if err == nil {}
+			server := lkp.configuration.Servers[0]
+			accessToken := auth.NewAccessToken(server.ApiKey, server.ApiSecret)
+			grant := &auth.VideoGrant{RoomJoin: true, Room: roomName}
+			accessToken.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)
+			tokenReply, err := accessToken.ToJWT()
+			if err == nil {
+				json.NewEncoder(w).Encode(tokenReply)
+				return
+			}
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	case "/delete":
+		var deleteRequest map[string]string
+		err := json.NewDecoder(r.Body).Decode(&deleteRequest)
+		postID, found := deleteRequest["postID"]
+		if err == nil && found {
+			info := fmt.Sprintf("User %s requested room deletion from post [%s]", userID, postID)
+			lkp.API.LogInfo(info)
+			post, appErr := lkp.API.GetPost(postID)
+			postHost := post.GetProp("room_host").(string)
+			roomName := post.GetProp("room_name").(string)
+			if appErr == nil && postHost == userID {
+				deletionRequest := livekit.DeleteRoomRequest{Room: roomName}
+				result, err := lkp.master.DeleteRoom(context.Background(), &deletionRequest)
+				if err == nil {
+					appErr = lkp.API.DeletePost(post.Id)
+					if appErr == nil {
+						http.Error(w, "OK", http.StatusOK)
+						return
+					}
+				}
+				lkp.API.LogInfo(result.String())
+			}
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		http.NotFound(w, r)
 	}
-	http.Error(w, err.Error(), http.StatusBadRequest)
 }
 
 // See https://developers.mattermost.com/extend/plugins/server/reference/

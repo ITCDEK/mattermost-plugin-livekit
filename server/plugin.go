@@ -102,9 +102,15 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
 		return
 	}
+	info := fmt.Sprintf("Got %s request on %s", r.Method, r.URL.Path)
+	lkp.API.LogInfo(info)
 	switch r.URL.Path {
 	case "/webhook":
 		fmt.Fprint(w, "Hello, world! This hook is not implemented yet.")
+	case "/host":
+		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L324
+		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L484
+		// lkp.API.SendEphemeralPost(userID, &model.Post{})
 	case "/room":
 		// https://stackoverflow.com/questions/57096382/response-from-interactive-button-post-is-ignored-in-mattermost
 		roomRequest := struct {

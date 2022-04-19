@@ -46,25 +46,32 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 
 	var err error
 	liveBot := &model.Bot{
-		Username:    "livekit",
+		UserId:      "livekit_id",
+		Username:    "livekit2",
 		DisplayName: "Live Bot",
 		Description: "A bot account created by the LiveKit plugin",
 	}
 
-	bot, ae := lkp.API.CreateBot(liveBot)
+	bot, ae := lkp.API.GetBot(liveBot.UserId, true)
 	if ae == nil {
 		lkp.bot = bot
-		command, err := lkp.compileSlashCommand()
-		if err == nil {
-			err = lkp.API.RegisterCommand(command)
-			if err == nil {
-				server := lkp.configuration.Servers[0]
-				lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
-				return nil
-			}
-		}
 	} else {
-		err = fmt.Errorf(ae.Error())
+		bot, ae = lkp.API.CreateBot(liveBot)
+		if ae == nil {
+			lkp.bot = bot
+		} else {
+			err = fmt.Errorf(ae.Error())
+			return err
+		}
+	}
+	command, err := lkp.compileSlashCommand()
+	if err == nil {
+		err = lkp.API.RegisterCommand(command)
+		if err == nil {
+			server := lkp.configuration.Servers[0]
+			lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
+			return nil
+		}
 	}
 
 	return err

@@ -21,8 +21,17 @@
         "bundle_path": "webapp/dist/main.js"
     },
     "settings_schema": {
-        "header": "",
-        "footer": "",
-        "settings": []
+        "header": "For the detailed settings description, please visit https://github.com/ITCDEK/mattermost-plugin-livekit",
+        "footer": "VoiceMatters settings",
+        "settings": [
+            {
+                "type": "text",
+                "key": "Server1",
+                "display_name": "Server #1",
+                "help_text": "JSON-formatted string, see plugin documentation on GitHub",
+                "placeholder": "{host: 'livekit.on.me', port: 7880}",
+                "default": null
+            }
+        ]
     }
 }

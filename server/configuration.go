@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -22,15 +23,14 @@ type livekitSettings struct {
 	Host       string
 	Port       int
 	ApiKey     string
-	ApiSecret  string
+	ApiValue   string
 	TurnSecure bool
-	TurnName   string
+	TurnHost   string
 	TurnPort   int
 	TurnUDP    int
 }
 
 type configuration struct {
-	Servers []livekitSettings
 	Server1 string
 }
 
@@ -44,15 +44,15 @@ func (c *configuration) Clone() *configuration {
 // getConfiguration retrieves the active configuration under lock, making it safe to use
 // concurrently. The active configuration may change underneath the client of this method, but
 // the struct returned by this API call is considered immutable.
-func (kit *LiveKitPlugin) getConfiguration() *configuration {
-	kit.configurationLock.RLock()
-	defer kit.configurationLock.RUnlock()
+func (lkp *LiveKitPlugin) getConfiguration() *configuration {
+	lkp.configurationLock.RLock()
+	defer lkp.configurationLock.RUnlock()
 
-	if kit.configuration == nil {
+	if lkp.configuration == nil {
 		return &configuration{}
 	}
 
-	return kit.configuration
+	return lkp.configuration
 }
 
 // setConfiguration replaces the active configuration under lock.
@@ -64,11 +64,11 @@ func (kit *LiveKitPlugin) getConfiguration() *configuration {
 // This method panics if setConfiguration is called with the existing configuration. This almost
 // certainly means that the configuration was modified without being cloned and may result in
 // an unsafe access.
-func (kit *LiveKitPlugin) setConfiguration(configuration *configuration) {
-	kit.configurationLock.Lock()
-	defer kit.configurationLock.Unlock()
+func (lkp *LiveKitPlugin) setConfiguration(configuration *configuration) {
+	lkp.configurationLock.Lock()
+	defer lkp.configurationLock.Unlock()
 
-	if configuration != nil && kit.configuration == configuration {
+	if configuration != nil && lkp.configuration == configuration {
 		// Ignore assignment if the configuration struct is empty. Go will optimize the
 		// allocation for same to point at the same memory address, breaking the check
 		// above.
@@ -79,19 +79,20 @@ func (kit *LiveKitPlugin) setConfiguration(configuration *configuration) {
 		panic("setConfiguration called with the existing configuration")
 	}
 
-	kit.configuration = configuration
+	lkp.configuration = configuration
 }
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
-func (kit *LiveKitPlugin) OnConfigurationChange() error {
+func (lkp *LiveKitPlugin) OnConfigurationChange() error {
 	var configuration = new(configuration)
 
 	// Load the public configuration fields from the Mattermost server configuration.
-	err := kit.API.LoadPluginConfiguration(configuration)
+	err := lkp.API.LoadPluginConfiguration(configuration)
 	if err == nil {
-		var server livekitSettings
-		configuration.Servers = append(configuration.Servers, server)
-		kit.setConfiguration(configuration)
+		err = json.Unmarshal([]byte(configuration.Server1), &lkp.Server)
+		if err == nil {
+			lkp.setConfiguration(configuration)
+		}
 		return nil
 	} else {
 		return errors.Wrap(err, "failed to load plugin configuration")

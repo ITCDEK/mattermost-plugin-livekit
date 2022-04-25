@@ -27,16 +27,38 @@ import (
 // LiveKitPlugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type LiveKitPlugin struct {
 	plugin.MattermostPlugin
-
-	// configurationLock synchronizes access to the configuration.
 	configurationLock sync.RWMutex
-
-	// configuration is the active plugin configuration. Consult getConfiguration and
-	// setConfiguration for usage.
-	configuration *configuration
-	bot           *model.Bot
-	master        *kitSDK.RoomServiceClient
+	configuration     *configuration
+	bot               *model.Bot
+	master            *kitSDK.RoomServiceClient
+	Server            livekitSettings
+	ROSID             string
+	// appInstance	*app.App
 }
+
+// func initDBCommandContext(configDSN string, readOnlyConfigStore bool) (*app.App, error) {
+// 	if err := utils.TranslationsPreInit(); err != nil {
+// 		return nil, err
+// 	}
+// 	model.AppErrorInit(i18n.T)
+
+// 	s, err := app.NewServer(
+// 		app.Config(configDSN, readOnlyConfigStore, nil),
+// 		app.StartSearchEngine,
+// 		app.StartMetrics,
+// 	)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	a := app.New(app.ServerConnector(s.Channels()))
+
+// 	if model.BuildEnterpriseReady == "true" {
+// 		a.Srv().LoadLicense()
+// 	}
+
+// 	return a, nil
+// }
 
 func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.API.LogInfo("Activating...")
@@ -45,6 +67,39 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.configuration = config
 
 	var err error
+	//Read-only scheme of roles
+	// appConfig := lkp.API.GetUnsanitizedConfig()
+	// fmt.Println(appConfig.SqlSettings.DataSource)
+	// a, err := initDBCommandContext("config.json", false)
+	// a.PatchChannelModerationsForChannel(&model.Channel{})
+	// Client := model.NewAPIv4Client("http://localhost:8065")
+	// Client.Login("Denis", "##332211qqwweE")
+	// scheme, resp, err := Client.GetScheme("read_only_scheme")
+	// if err == nil {
+	// 	lkp.API.LogInfo("Read-only scheme obtained successefully")
+	// 	lkp.ROSID = scheme.Id
+	// 	fmt.Println(resp)
+	// } else {
+	// 	adminRole := model.Role{SchemeManaged: true}
+	// 	patch := model.RolePatch{Permissions: &[]string{"add_reaction", "remove_reaction"}}
+	// 	userRole, resp, err := Client.PatchRole(nil, &patch)
+	// 	guestRole := model.Role{SchemeManaged: true}
+	// 	readonlyScheme := model.Scheme{
+	// 		Id:                      "read-only-scheme",
+	// 		Name:                    "read-only",
+	// 		DisplayName:             "",
+	// 		Description:             "Read-only scheme",
+	// 		DefaultChannelAdminRole: adminRole.Id,
+	// 		DefaultChannelUserRole:  userRole.Id,
+	// 		DefaultChannelGuestRole: guestRole.Id,
+	// 		Scope:                   "channel",
+	// 	}
+	// 	// Client.UpdateChannelScheme()
+	// 	scheme, resp, err = Client.CreateScheme(&readonlyScheme)
+	// 	fmt.Println(readonlyScheme)
+	// }
+
+	//Bot
 	liveBot := &model.Bot{
 		UserId:      "livekit_id",
 		Username:    "livekit2",
@@ -68,8 +123,8 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	if err == nil {
 		err = lkp.API.RegisterCommand(command)
 		if err == nil {
-			server := lkp.configuration.Servers[0]
-			lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiSecret)
+			server := lkp.Server
+			lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiValue)
 			return nil
 		}
 	}
@@ -189,8 +244,8 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			// options := livekit.ListRoomsRequest{Names: []string{}}
 			// listing, err := lkp.master.ListRooms(context.Background(), &options)
 			// if err == nil {}
-			server := lkp.configuration.Servers[0]
-			accessToken := auth.NewAccessToken(server.ApiKey, server.ApiSecret)
+			server := lkp.Server
+			accessToken := auth.NewAccessToken(server.ApiKey, server.ApiValue)
 			grant := &auth.VideoGrant{RoomJoin: true, Room: roomName}
 			accessToken.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)
 			tokenReply, err := accessToken.ToJWT()
@@ -224,6 +279,12 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			}
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
+	case "/settings":
+		settings := struct {
+			Server livekitSettings
+			ROSID  string
+		}{Server: lkp.Server, ROSID: lkp.ROSID}
+		json.NewEncoder(w).Encode(settings)
 	default:
 		http.NotFound(w, r)
 	}

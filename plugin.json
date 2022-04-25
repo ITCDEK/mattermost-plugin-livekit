@@ -30,7 +30,7 @@
                 "display_name": "Server #1",
                 "help_text": "JSON-formatted string, see plugin documentation on GitHub",
                 "placeholder": "{host: 'livekit.on.me', port: 7880}",
-                "default": null
+                "default": "{host: '172.16.42.228', secure: false, port: 7880, turnhost: '172.16.42.228', turnport: 5349, turnsecure: false, turnudp: 443, apikey: 'API7vTUvag3wqvW', apivalue: 'mqtMUyGxMzzw7tUfGmlYIo4utTs66svftv8MRh1HTxp'}"
             }
         ]
     }

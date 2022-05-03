@@ -377,6 +377,36 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			ROSID  string
 		}{Server: lkp.Server, ROSID: lkp.ROSID}
 		json.NewEncoder(w).Encode(settings)
+	case "/scheme":
+		patch := struct {
+			SchemeID  string `json:"scheme_id"`
+			ChannelID string `json:"channel_id"`
+		}{}
+		var reply map[string]string
+		jsonErr := json.NewDecoder(r.Body).Decode(&patch)
+		if jsonErr == nil {
+			// session, ae := lkp.API.GetSession(c.SessionId)
+			// if lkp.appInstance.SessionHasPermissionTo(*session, model.PermissionManageSystem) && ae == nil {
+			// }
+			channel, chErr := lkp.API.GetChannel(patch.ChannelID)
+			scheme, schErr := lkp.appInstance.GetScheme(patch.SchemeID)
+			if chErr == nil && schErr == nil {
+				channel.SchemeId = &scheme.Id
+				newChannel, ae := lkp.appInstance.UpdateChannel(channel)
+				if ae == nil {
+					lkp.API.LogInfo("Channel scheme set to", "id", newChannel.SchemeId)
+					reply["result"] = "ok"
+				} else {
+					lkp.API.LogWarn("Setting scheme failed", "error", ae.DetailedError)
+					reply["result"] = ae.DetailedError
+				}
+			} else {
+				reply["result"] = chErr.DetailedError + "|" + schErr.DetailedError
+			}
+		} else {
+			reply["result"] = jsonErr.Error()
+		}
+		json.NewEncoder(w).Encode(reply)
 	default:
 		http.NotFound(w, r)
 	}

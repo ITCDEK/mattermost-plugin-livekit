@@ -11,6 +11,8 @@ import (
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
 	kitSDK "github.com/livekit/server-sdk-go"
+	"github.com/mattermost/mattermost-server/v6/app"
+	"github.com/mattermost/mattermost-server/v6/config"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
 )
@@ -31,6 +33,9 @@ type LiveKitPlugin struct {
 	configuration     *configuration
 	bot               *model.Bot
 	master            *kitSDK.RoomServiceClient
+	storeInstance     *config.Store
+	serverInstance    *app.Server
+	appInstance       *app.App
 	Server            livekitSettings
 	ROSID             string
 	// appInstance	*app.App
@@ -62,9 +67,9 @@ type LiveKitPlugin struct {
 
 func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.API.LogInfo("Activating...")
-	config := lkp.getConfiguration()
-	// validate config here
-	lkp.configuration = config
+	configuration := lkp.getConfiguration()
+	// validate configuration here
+	lkp.configuration = configuration
 
 	var err error
 	//Read-only scheme of roles
@@ -99,6 +104,90 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	// 	fmt.Println(readonlyScheme)
 	// }
 
+	configStore, err := config.NewStoreFromDSN("config.json", false, nil)
+	if err != nil {
+		lkp.API.LogWarn("failed to obtain configStore", "error", err.Error())
+	}
+	// defer configStore.Close()
+	options := []app.Option{app.ConfigStore(configStore)}
+	server, err := app.NewServer(options...)
+	if err != nil {
+		lkp.API.LogWarn("failed to obtain server", "error", err.Error())
+	}
+	// defer server.Shutdown()
+	//
+	// api := api4.Init(server)
+	// if err != nil {
+	// 	lkp.API.LogWarn("failed to obtain API instance", err.Error())
+	// }
+	// appInstance := app.New(app.ServerConnector(api.srv.Channels()))
+	appInstance := app.New(app.ServerConnector(server.Channels()))
+	// model.NewTestLicense("custom_permissions_schemes")
+	// App.SetPhase2PermissionsMigrationStatus(true)
+	readonlyScheme, ae := appInstance.GetSchemeByName("read_only")
+	if ae == nil {
+		lkp.API.LogInfo("read-only scheme found", "id", readonlyScheme.Id)
+	} else {
+		scheme := model.Scheme{
+			Name:        "read_only",
+			DisplayName: "Read-only scheme",
+			Description: "Read-only scheme",
+			// DefaultChannelAdminRole: adminRole.Id,
+			// DefaultChannelUserRole:  userRole.Id,
+			// DefaultChannelGuestRole: guestRole.Id,
+			Scope: model.SchemeScopeChannel,
+		}
+		readonlyScheme, ae = appInstance.CreateScheme(&scheme)
+		if ae == nil {
+			lkp.API.LogInfo("read-only scheme created", "id", readonlyScheme.Id)
+		} else {
+			lkp.API.LogWarn("read-only scheme fails", "reason", ae.DetailedError)
+		}
+	}
+	roleset, ae := appInstance.GetRolesByNames([]string{readonlyScheme.DefaultChannelAdminRole, readonlyScheme.DefaultChannelUserRole, readonlyScheme.DefaultChannelGuestRole})
+	if ae == nil && len(roleset) == 3 {
+		adminRole := roleset[0]
+		userRole := roleset[1]
+		guestRole := roleset[2]
+		if userRole.Permissions[0] != "add_reaction" {
+			patch := model.RolePatch{
+				Permissions: &[]string{"add_reaction", "remove_reaction"},
+			}
+			patchedUserRole, ae := appInstance.PatchRole(userRole, &patch)
+			if ae == nil {
+				lkp.API.LogInfo("read-only User role patched", "id", patchedUserRole.Id)
+				fmt.Println(patchedUserRole.Permissions)
+			} else {
+				lkp.API.LogInfo("read-only user role patch fails", "reason", ae.DetailedError)
+			}
+			patchedGuestRole, ae := appInstance.PatchRole(guestRole, &patch)
+			if ae == nil {
+				lkp.API.LogInfo("read-only Guest role patched", "id", patchedGuestRole.Id)
+				fmt.Println(patchedGuestRole.Permissions)
+			} else {
+				lkp.API.LogInfo("read-only guest role patch fails", "reason", ae.DetailedError)
+			}
+		}
+		fmt.Println("Read-only admin role id =", adminRole.Id)
+	} else {
+		lkp.API.LogInfo("read-only role set fails", "reason", ae.DetailedError)
+	}
+	testChannel, ae := appInstance.GetChannel("madgimq6iidium8dpc6w7hf5we")
+	if ae == nil && testChannel.SchemeId != &readonlyScheme.Id {
+		testChannel.SchemeId = &readonlyScheme.Id
+		updatedChannel, ae := appInstance.UpdateChannelScheme(testChannel)
+		if ae == nil {
+			lkp.API.LogInfo("Channel got read-only SchemeID", "id", *updatedChannel.SchemeId)
+		} else {
+			lkp.API.LogInfo("setting SchemeID fails", "reason", ae.DetailedError)
+		}
+	} else {
+		lkp.API.LogInfo("setting SchemeID fails", "reason", ae.DetailedError)
+	}
+	lkp.storeInstance = configStore
+	lkp.serverInstance = server
+	lkp.appInstance = appInstance
+
 	//Bot
 	liveBot := &model.Bot{
 		UserId:      "livekit_id",
@@ -123,8 +212,8 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	if err == nil {
 		err = lkp.API.RegisterCommand(command)
 		if err == nil {
-			server := lkp.Server
-			lkp.master = kitSDK.NewRoomServiceClient(server.Host, server.ApiKey, server.ApiValue)
+			serverURL := fmt.Sprintf("%s:%d", lkp.Server.Host, lkp.Server.Port)
+			lkp.master = kitSDK.NewRoomServiceClient(serverURL, lkp.Server.ApiKey, lkp.Server.ApiValue)
 			return nil
 		}
 	}
@@ -133,6 +222,9 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 }
 
 func (lkp *LiveKitPlugin) OnDeactivate() error {
+	lkp.storeInstance.Close()
+	lkp.serverInstance.Shutdown()
+	lkp.appInstance = nil
 	return nil
 }
 

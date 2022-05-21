@@ -13,9 +13,11 @@ import (
 	kitSDK "github.com/livekit/server-sdk-go"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
+	// pluginAPI "github.com/mattermost/mattermost-plugin-api"
 )
 
 // References
+// https://github.com/mattermost/mattermost-plugin-calls
 // https://github.com/mattermost/mattermost-plugin-jitsi
 // https://github.com/mattermost/mattermost-plugin-zoom
 // https://github.com/streamer45/mattermost-plugin-voice
@@ -31,32 +33,7 @@ type LiveKitPlugin struct {
 	configuration     *configuration
 	bot               *model.Bot
 	master            *kitSDK.RoomServiceClient
-	Server            livekitSettings
 }
-
-// func initDBCommandContext(configDSN string, readOnlyConfigStore bool) (*app.App, error) {
-// 	if err := utils.TranslationsPreInit(); err != nil {
-// 		return nil, err
-// 	}
-// 	model.AppErrorInit(i18n.T)
-
-// 	s, err := app.NewServer(
-// 		app.Config(configDSN, readOnlyConfigStore, nil),
-// 		app.StartSearchEngine,
-// 		app.StartMetrics,
-// 	)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	a := app.New(app.ServerConnector(s.Channels()))
-
-// 	if model.BuildEnterpriseReady == "true" {
-// 		a.Srv().LoadLicense()
-// 	}
-
-// 	return a, nil
-// }
 
 func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.API.LogInfo("Activating...")

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -19,19 +18,18 @@ import (
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type livekitSettings struct {
+}
+
+type configuration struct {
 	Secure     bool
 	Host       string
 	Port       int
-	ApiKey     string
-	ApiValue   string
 	TurnSecure bool
 	TurnHost   string
 	TurnPort   int
 	TurnUDP    int
-}
-
-type configuration struct {
-	Server1 string
+	ApiKey     string `json:"-"`
+	ApiValue   string `json:"-"`
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -89,10 +87,7 @@ func (lkp *LiveKitPlugin) OnConfigurationChange() error {
 	// Load the public configuration fields from the Mattermost server configuration.
 	err := lkp.API.LoadPluginConfiguration(configuration)
 	if err == nil {
-		err = json.Unmarshal([]byte(configuration.Server1), &lkp.Server)
-		if err == nil {
-			lkp.setConfiguration(configuration)
-		}
+		lkp.setConfiguration(configuration)
 		return nil
 	} else {
 		return errors.Wrap(err, "failed to load plugin configuration")

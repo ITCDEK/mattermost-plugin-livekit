@@ -4,16 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/livekit/protocol/auth"
 	"github.com/livekit/protocol/livekit"
 	kitSDK "github.com/livekit/server-sdk-go"
+	pluginSDK "github.com/mattermost/mattermost-plugin-api"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
-	// pluginAPI "github.com/mattermost/mattermost-plugin-api"
+	"github.com/pkg/errors"
 )
 
 // References
@@ -29,10 +32,11 @@ import (
 // LiveKitPlugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type LiveKitPlugin struct {
 	plugin.MattermostPlugin
+	botUserID         string
 	configurationLock sync.RWMutex
 	configuration     *configuration
-	bot               *model.Bot
 	master            *kitSDK.RoomServiceClient
+	sdk               *pluginSDK.Client
 }
 
 func (lkp *LiveKitPlugin) OnActivate() error {
@@ -40,28 +44,36 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	configuration := lkp.getConfiguration()
 	// validate configuration here
 	lkp.configuration = configuration
+	lkp.sdk = pluginSDK.NewClient(lkp.API, lkp.Driver)
 
-	var err error
 	//Bot
 	liveBot := &model.Bot{
-		UserId:      "livekit_id",
-		Username:    "livekit2",
+		Username:    "liveKit",
 		DisplayName: "Live Bot",
 		Description: "A bot account created by the LiveKit plugin",
 	}
 
-	bot, ae := lkp.API.GetBot(liveBot.UserId, true)
-	if ae == nil {
-		lkp.bot = bot
+	botUserID, err := lkp.sdk.Bot.EnsureBot(liveBot)
+	if err == nil {
+		lkp.botUserID = botUserID
 	} else {
-		bot, ae = lkp.API.CreateBot(liveBot)
-		if ae == nil {
-			lkp.bot = bot
-		} else {
-			err = fmt.Errorf(ae.Error())
-			return err
-		}
+		return errors.Wrap(err, "failed to ensure bot account")
 	}
+
+	bundlePath, err := lkp.API.GetBundlePath()
+	if err == nil {
+		profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.svg"))
+		if err == nil {
+			if appErr := lkp.API.SetProfileImage(botUserID, profileImage); appErr != nil {
+				return errors.Wrap(appErr, "couldn't set profile image")
+			}
+		} else {
+			return errors.Wrap(err, "couldn't read profile image")
+		}
+	} else {
+		return errors.Wrap(err, "couldn't get bundle path")
+	}
+
 	command, err := lkp.compileSlashCommand()
 	if err == nil {
 		err = lkp.API.RegisterCommand(command)
@@ -144,7 +156,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 					if err == nil {
 						lkp.API.LogInfo("room created at", room.CreationTime)
 						post := &model.Post{
-							UserId:    lkp.bot.UserId,
+							UserId:    lkp.botUserID,
 							ChannelId: channel.Id,
 							RootId:    roomRequest.RootID,
 							Message:   "I have started a meeting",

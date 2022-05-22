@@ -154,13 +154,13 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 						},
 					)
 					if err == nil {
-						lkp.API.LogInfo("room created at", room.CreationTime)
+						lkp.API.LogInfo("room created", "session id", room.Sid)
 						post := &model.Post{
 							UserId:    lkp.botUserID,
 							ChannelId: channel.Id,
 							RootId:    roomRequest.RootID,
 							Message:   "I have started a meeting",
-							Type:      "custom_livekit",
+							Type:      "livekit_room",
 							Props: map[string]interface{}{
 								"room_capacity": room.MaxParticipants,
 								"room_name":     room.Name,
@@ -192,8 +192,9 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 	case "/join":
 		var tokenRequest map[string]string
 		err := json.NewDecoder(r.Body).Decode(&tokenRequest)
-		roomName, found := tokenRequest["roomID"]
-		if err == nil && found {
+		roomPost, ae := lkp.API.GetPost(tokenRequest["postID"])
+		roomName, ok := roomPost.GetProp("room_name").(string)
+		if err == nil && ae == nil && ok {
 			info := fmt.Sprintf("User %s requested new access token for [%s]", userID, roomName)
 			lkp.API.LogInfo(info)
 			// options := livekit.ListRoomsRequest{Names: []string{}}
@@ -204,7 +205,13 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			accessToken.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)
 			tokenReply, err := accessToken.ToJWT()
 			if err == nil {
-				json.NewEncoder(w).Encode(tokenReply)
+				props := roomPost.GetProps()
+				props[userID] = tokenReply
+				roomPost.SetProps(props)
+				_, ae = lkp.API.UpdatePost(roomPost)
+				if ae == nil {
+					json.NewEncoder(w).Encode(tokenReply)
+				}
 				return
 			}
 		}

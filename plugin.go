@@ -23,10 +23,7 @@ func init() {
 	Manifest.Props = properties
 	exeList := map[string]string{
 		"linux-amd64":   "server/dist/plugin-linux-amd64",
-		"linux-arm64":   "server/dist/plugin-linux-arm64",
-		"darwin-amd64":  "server/dist/plugin-darwin-amd64",
-		"darwin-arm64":  "server/dist/plugin-darwin-arm64",
-		"windows-amd64": "server/dist/plugin-windows-amd64.exe",
+		"linux-arm64":   "server/dist/plugin-linux-arm64"
 	}
 	Manifest.Server = &model.ManifestServer{Executables: exeList}
 	Manifest.SettingsSchema = &model.PluginSettingsSchema{

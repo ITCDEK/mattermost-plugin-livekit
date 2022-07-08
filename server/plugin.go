@@ -125,6 +125,42 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 	switch r.URL.Path {
 	case "/webhook":
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
+	case "/mvp_token":
+		var room *livekit.Room
+		mvpRequest := struct {
+			PostID string `json:"post_id"`
+		}{}
+		err := json.NewDecoder(r.Body).Decode(&mvpRequest)
+		if err == nil {
+			roomList, err := lkp.master.ListRooms(
+				context.Background(),
+				&livekit.ListRoomsRequest{Names: []string{mvpRequest.PostID}},
+			)
+			if err == nil && len(roomList.Rooms) > 0 {
+				room = roomList.Rooms[0]
+			} else {
+				newRoom, err := lkp.master.CreateRoom(
+					context.Background(),
+					&livekit.CreateRoomRequest{
+						Name:         mvpRequest.PostID,
+						Metadata:     userID,
+						EmptyTimeout: 300,
+					},
+				)
+				if err == nil {
+					room = newRoom
+				}
+			}
+			accessToken := auth.NewAccessToken(lkp.configuration.ApiKey, lkp.configuration.ApiValue)
+			grant := &auth.VideoGrant{RoomJoin: true, Room: room.Name}
+			accessToken.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)
+			tokenReply, err := accessToken.ToJWT()
+			if err == nil {
+				json.NewEncoder(w).Encode(tokenReply)
+				return
+			}
+		}
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	case "/host":
 		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L324
 		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L484

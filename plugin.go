@@ -8,7 +8,6 @@ import (
 	"github.com/mattermost/mattermost-server/v6/model"
 )
 
-//go:embed plugin.json
 // var manifestString string
 
 var Manifest model.Manifest
@@ -22,8 +21,7 @@ func init() {
 	var properties map[string]interface{}
 	Manifest.Props = properties
 	exeList := map[string]string{
-		"linux-amd64":   "server/dist/plugin-linux-amd64",
-		"linux-arm64":   "server/dist/plugin-linux-arm64"
+		"linux-amd64": "server/dist/plugin-linux-amd64",
 	}
 	Manifest.Server = &model.ManifestServer{Executables: exeList}
 	Manifest.SettingsSchema = &model.PluginSettingsSchema{

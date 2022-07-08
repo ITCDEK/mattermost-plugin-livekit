@@ -40,7 +40,7 @@ type LiveKitPlugin struct {
 }
 
 func (lkp *LiveKitPlugin) OnActivate() error {
-	lkp.API.LogInfo("Activating...")
+	lkp.API.LogInfo("Activating LiveKit integration...")
 	configuration := lkp.getConfiguration()
 	// validate configuration here
 	lkp.configuration = configuration
@@ -83,6 +83,7 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 			return nil
 		}
 	}
+	lkp.API.LogInfo("LiveKit integration done")
 
 	return err
 }

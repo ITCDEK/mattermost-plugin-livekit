@@ -132,12 +132,14 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		}{}
 		err := json.NewDecoder(r.Body).Decode(&mvpRequest)
 		if err == nil {
+			lkp.API.LogInfo("room token requested", "post_id", mvpRequest.PostID)
 			roomList, err := lkp.master.ListRooms(
 				context.Background(),
 				&livekit.ListRoomsRequest{Names: []string{mvpRequest.PostID}},
 			)
 			if err == nil && len(roomList.Rooms) > 0 {
 				room = roomList.Rooms[0]
+				lkp.API.LogInfo("room found", "name", room.Name)
 			} else {
 				newRoom, err := lkp.master.CreateRoom(
 					context.Background(),
@@ -149,6 +151,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 				)
 				if err == nil {
 					room = newRoom
+					lkp.API.LogInfo("room created", "name", room.Name)
 				}
 			}
 			accessToken := auth.NewAccessToken(lkp.configuration.ApiKey, lkp.configuration.ApiValue)

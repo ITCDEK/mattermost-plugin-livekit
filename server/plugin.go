@@ -4,9 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -16,7 +14,6 @@ import (
 	pluginSDK "github.com/mattermost/mattermost-plugin-api"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
-	"github.com/pkg/errors"
 )
 
 // References
@@ -47,32 +44,32 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.sdk = pluginSDK.NewClient(lkp.API, lkp.Driver)
 
 	//Bot
-	liveBot := &model.Bot{
-		Username:    "liveKit",
-		DisplayName: "Live Bot",
-		Description: "A bot account created by the LiveKit plugin",
-	}
+	// liveBot := &model.Bot{
+	// 	Username:    "livekit",
+	// 	DisplayName: "Live Bot",
+	// 	Description: "A bot account created by the LiveKit plugin",
+	// }
 
-	botUserID, err := lkp.sdk.Bot.EnsureBot(liveBot)
-	if err == nil {
-		lkp.botUserID = botUserID
-	} else {
-		return errors.Wrap(err, "failed to ensure bot account")
-	}
+	// botUserID, err := lkp.sdk.Bot.EnsureBot(liveBot)
+	// if err == nil {
+	// 	lkp.botUserID = botUserID
+	// } else {
+	// 	return errors.Wrap(err, "failed to ensure bot account")
+	// }
 
-	bundlePath, err := lkp.API.GetBundlePath()
-	if err == nil {
-		profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.svg"))
-		if err == nil {
-			if appErr := lkp.API.SetProfileImage(botUserID, profileImage); appErr != nil {
-				return errors.Wrap(appErr, "couldn't set profile image")
-			}
-		} else {
-			return errors.Wrap(err, "couldn't read profile image")
-		}
-	} else {
-		return errors.Wrap(err, "couldn't get bundle path")
-	}
+	// bundlePath, err := lkp.API.GetBundlePath()
+	// if err == nil {
+	// 	profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.svg"))
+	// 	if err == nil {
+	// 		if appErr := lkp.API.SetProfileImage(botUserID, profileImage); appErr != nil {
+	// 			return errors.Wrap(appErr, "couldn't set profile image")
+	// 		}
+	// 	} else {
+	// 		return errors.Wrap(err, "couldn't read profile image")
+	// 	}
+	// } else {
+	// 	return errors.Wrap(err, "couldn't get bundle path")
+	// }
 
 	command, err := lkp.compileSlashCommand()
 	if err == nil {

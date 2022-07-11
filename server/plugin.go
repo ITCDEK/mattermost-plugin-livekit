@@ -77,7 +77,7 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 		if err == nil {
 			serverURL := fmt.Sprintf("wss://%s:%d", lkp.configuration.Host, lkp.configuration.Port)
 			lkp.master = kitSDK.NewRoomServiceClient(serverURL, lkp.configuration.ApiKey, lkp.configuration.ApiValue)
-			lkp.API.LogInfo("api acess", "key", lkp.configuration.ApiKey, "value", lkp.configuration.ApiValue)
+			lkp.API.LogInfo("api access", "key", lkp.configuration.ApiKey, "value", lkp.configuration.ApiValue)
 			lkp.API.LogInfo("lkp.master assigned", "pointer", lkp.master)
 			return nil
 		}

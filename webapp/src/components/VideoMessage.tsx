@@ -19,6 +19,8 @@ import {
     LiveKitRoom,
 } from '@livekit/react-components';
 
+import {connect} from 'react-redux';
+
 import {createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
 
 import {
@@ -32,6 +34,8 @@ import {
     Button,
 } from '@chakra-ui/react';
 
+import {fetchToken} from '../actions';
+
 // this is our demo server for demonstration purposes. It's easy to deploy your own.
 // eslint-disable-next-line no-restricted-globals
 const OBJ = location.search === '?sec' ? {
@@ -41,21 +45,30 @@ const OBJ = location.search === '?sec' ? {
     token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ2aWRlbyI6eyJyb29tSm9pbiI6dHJ1ZSwicm9vbSI6InJ0eSIsImNhblB1Ymxpc2giOnRydWUsImNhblN1YnNjcmliZSI6dHJ1ZX0sImlhdCI6MTY1NzIwNjMwMiwibmJmIjoxNjU3MjA2MzAyLCJleHAiOjE2NTcyMTM1MDIsImlzcyI6IkFQSWt6V2hieEJhR1NpcSIsInN1YiI6InJ0eTEiLCJqdGkiOiJydHkxIn0.QEMAJgz9QgHA0C77I7UzYra8vkT5qngNrfiJ2F_c8ms',
     url: 'wss://demo.livekit.cloud',
 };
-const RoomView = () => (
-    <Box
-        w='100%'
-        h='100%'
-    >
-        <LiveKitRoom
-            url={OBJ.url}
-            token={OBJ.token}
-            stageRenderer={StageView}
-            onConnected={(room) => {
-                handleConnected(room);
-            }}
-        />
-    </Box>
-);
+const RoomView = (props:any) => {
+    console.log(props);
+    const [token, setToken] = React.useState('');
+    const onClick = () => {
+        props.onFetchToken(props.post.id);
+    };
+    return !token ? <div style={{height: '50px', width: '150px'}}>
+        <button onClick={onClick}>GET TOKEN</button>
+    </div> : (
+        <Box
+            w='100%'
+            h='100%'
+        >
+            <LiveKitRoom
+                url={OBJ.url}
+                token={OBJ.token}
+                stageRenderer={StageView}
+                onConnected={(room) => {
+                    handleConnected(room);
+                }}
+            />
+        </Box>
+    );
+};
 
 const CustomParticipantView = ({participant}) => {
     const {cameraPublication, isLocal} = useParticipant(participant);
@@ -179,5 +192,4 @@ async function handleConnected(room) {
     });
 }
 
-export default RoomView;
-
+export default connect(null, {onFetchToken: fetchToken})(RoomView);

@@ -17,17 +17,60 @@
         "bundle_path": "webapp/dist/main.js"
     },
     "settings_schema": {
-        "header": "For the detailed settings description, please visit https://github.com/ITCDEK/mattermost-plugin-livekit",
-        "footer": "VoiceMatters settings",
         "settings": [
             {
                 "type": "text",
-                "key": "Server1",
-                "display_name": "Server #1",
-                "help_text": "JSON-formatted string, see plugin documentation on GitHub",
-                "placeholder": "{host: 'livekit.on.me', port: 7880}",
-                "default": "{host: '172.16.42.228', secure: false, port: 7880, turnhost: '172.16.42.228', turnport: 5349, turnsecure: false, turnudp: 443, apikey: 'API7vTUvag3wqvW', apivalue: 'mqtMUyGxMzzw7tUfGmlYIo4utTs66svftv8MRh1HTxp'}"
+                "key": "host",
+                "display_name": "Host",
+                "placeholder": "livekit.our.own"
+            },
+            {
+                "type": "number",
+                "key": "port",
+                "display_name": "Host port",
+                "placeholder": "7880"
+            },
+            {
+                "type": "bool",
+                "key": "secure",
+                "display_name": "Host over HTTPS"
+            },
+            {
+                "type": "text",
+                "key": "turnhost",
+                "display_name": "TURN Host",
+                "placeholder": "turn.our.own"
+            },
+            {
+                "type": "number",
+                "key": "turnport",
+                "display_name": "Turn TCP port",
+                "placeholder": "5349"
+            },
+            {
+                "type": "number",
+                "key": "turnudp",
+                "display_name": "Turn UDP port",
+                "placeholder": "443"
+            },
+            {
+                "type": "bool",
+                "key": "turnsecure",
+                "display_name": "TURN over HTTPS"
+            },
+            {
+                "type": "text",
+                "key": "apikey",
+                "display_name": "API secret key",
+                "placeholder": "API7vTUvag3wqvW"
+            },
+            {
+                "type": "text",
+                "key": "apivalue",
+                "display_name": "API secret value",
+                "placeholder": "mqtMUyGxMzzw7tUfGmlYIo4utTs66svftv8MRh1HTxp"
             }
-        ]
+        ],
+        "footer": "For the detailed settings description, please visit https://github.com/ITCDEK/mattermost-plugin-livekit"
     }
 }

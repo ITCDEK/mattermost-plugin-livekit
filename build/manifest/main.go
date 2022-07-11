@@ -29,7 +29,7 @@ func main() {
 
 	case "has_server":
 		if manifest.HasServer() {
-			fmt.Printf("false")
+			fmt.Printf("true")
 		}
 
 	case "has_webapp":

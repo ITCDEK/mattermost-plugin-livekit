@@ -77,6 +77,7 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 		if err == nil {
 			serverURL := fmt.Sprintf("%s:%d", lkp.configuration.Host, lkp.configuration.Port)
 			lkp.master = kitSDK.NewRoomServiceClient(serverURL, lkp.configuration.ApiKey, lkp.configuration.ApiValue)
+			lkp.API.LogInfo("lkp.master assigned", "pointer", lkp.master)
 			return nil
 		}
 	}
@@ -129,6 +130,10 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		}{}
 		err := json.NewDecoder(r.Body).Decode(&mvpRequest)
 		if err == nil {
+			if lkp.master == nil {
+				http.Error(w, "lkp.master is nil", http.StatusFailedDependency)
+				return
+			}
 			lkp.API.LogInfo("room token requested", "post_id", mvpRequest.PostID)
 			roomList, err := lkp.master.ListRooms(
 				context.Background(),
@@ -149,8 +154,11 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 				if err == nil {
 					room = newRoom
 					lkp.API.LogInfo("room created", "name", room.Name)
+				} else {
+					lkp.API.LogError("room creation failed", "reason", err.Error())
 				}
 			}
+			lkp.API.LogInfo("room assigned", "pointer", room, "name", room.Name)
 			accessToken := auth.NewAccessToken(lkp.configuration.ApiKey, lkp.configuration.ApiValue)
 			grant := &auth.VideoGrant{RoomJoin: true, Room: room.Name}
 			accessToken.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)

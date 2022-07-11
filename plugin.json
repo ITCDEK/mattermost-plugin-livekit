@@ -1,6 +1,6 @@
 {
     "id": "com.mattermost.plugin-livekit",
-    "name": "VoiceMatters",
+    "name": "LiveKit",
     "description": "LiveKit audio and video conferencing plugin for Mattermost",
     "homepage_url": "https://github.com/ITCDEK/mattermost-plugin-livekit",
     "support_url": "https://github.com/ITCDEK/mattermost-plugin-livekit/issues",

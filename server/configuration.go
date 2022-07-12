@@ -26,8 +26,8 @@ type configuration struct {
 	TurnHost   string
 	TurnPort   int
 	TurnUDP    int
-	ApiKey     string `json:"-"`
-	ApiValue   string `json:"-"`
+	ApiKey     string //`json:"-"`
+	ApiValue   string //`json:"-"`
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if

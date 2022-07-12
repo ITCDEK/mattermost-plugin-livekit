@@ -75,14 +75,14 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	if err == nil {
 		err = lkp.API.RegisterCommand(command)
 		if err == nil {
-			serverURL := fmt.Sprintf("wss://%s:%d", lkp.configuration.Host, lkp.configuration.Port)
+			serverURL := fmt.Sprintf("ws://%s:%d", lkp.configuration.Host, lkp.configuration.Port)
 			lkp.master = kitSDK.NewRoomServiceClient(serverURL, lkp.configuration.ApiKey, lkp.configuration.ApiValue)
 			lkp.API.LogInfo("api access", "key", lkp.configuration.ApiKey, "value", lkp.configuration.ApiValue)
 			lkp.API.LogInfo("lkp.master assigned", "pointer", lkp.master)
 			return nil
 		}
 	}
-	lkp.API.LogInfo("LiveKit integration done")
+	lkp.API.LogInfo("LiveKit integration activated")
 
 	return err
 }
@@ -287,7 +287,10 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case "/settings":
-		json.NewEncoder(w).Encode(lkp.configuration)
+		copy := lkp.configuration
+		// copy.ApiKey = ""
+		// copy.ApiValue = ""
+		json.NewEncoder(w).Encode(copy)
 	default:
 		http.NotFound(w, r)
 	}

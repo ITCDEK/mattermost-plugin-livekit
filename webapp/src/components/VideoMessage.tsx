@@ -20,31 +20,23 @@ import {
 } from '@livekit/react-components';
 
 import {connect} from 'react-redux';
-
+import Card from 'react-bootstrap/Card';
+import Button from 'react-bootstrap/Button';
+import Container from 'react-bootstrap/Container';
+import Row from 'react-bootstrap/Row';
+import Col from 'react-bootstrap/Col';
+import ToggleButton from 'react-bootstrap/ToggleButton';
+import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup';
 import {createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
-
-import {
-    Flex,
-    Grid,
-    HStack,
-    VStack,
-    Box,
-    Text,
-    Icon,
-    Button,
-    ChakraProvider,
-} from '@chakra-ui/react';
 
 import {fetchToken} from '../actions';
 
-// this is our demo server for demonstration purposes. It's easy to deploy your own.
-// eslint-disable-next-line no-restricted-globals
+import './style.scss';
 
 const WSS_HOST = 'wss://livekit.k8s-local.cdek.ru';
 
-// const WSS_HOST = '172.16.41.103:32766';
 const RoomView = (props: any) => {
-    console.log(props);
+    // console.log(props);
     const [token, setToken] = React.useState('');
     const handleClick = () => {
         props.onFetchToken(props.post.id);
@@ -58,22 +50,16 @@ const RoomView = (props: any) => {
     };
     return (<>
         {!token ?
-            <Box
-                maxW='sm'
-                borderWidth='1px'
-                borderRadius='lg'
-                overflow='hidden'
-            >
-                <Button
-                    colorScheme='blue'
-                    onClick={handleClick}
-                >Подключиться</Button>
-            </Box> :
+            <Card>
+                <Card.Body>
+                    <Button
+                        variant='primary'
+                        onClick={handleClick}
+                    >Подключиться</Button>
+                </Card.Body>
+            </Card> :
             (
-                <Box
-                    w='100%'
-                    h='100%'
-                >
+                <Card>
                     <LiveKitRoom
                         url={WSS_HOST}
                         token={token}
@@ -82,48 +68,32 @@ const RoomView = (props: any) => {
                             handleConnected(room);
                         }}
                     />
-                </Box>
+                </Card>
             )}
     </>);
 };
 
 const CustomParticipantView = ({participant}) => {
-    const {cameraPublication, isLocal} = useParticipant(participant);
+    const {cameraPublication, isLocal, screenSharePublication} = useParticipant(participant);
+    console.log(cameraPublication, isLocal, screenSharePublication);
     if (!cameraPublication || !cameraPublication.isSubscribed || !cameraPublication.track || cameraPublication.isMuted) {
         return null;
     }
     return (
-        <Box
-            w='95%'
-            pos='relative'
-            left='50%'
-            transform='translateX(-50%)'
-        >
+        <Card>
             <VideoRenderer
-                track={cameraPublication.track}
+                track={screenSharePublication ? screenSharePublication.track : cameraPublication.track}
                 isLocal={isLocal}
                 objectFit='contain'
                 width='100%'
                 height='100%'
             />
-        </Box>
+        </Card>
     );
 };
 
 const RoomStatusView = ({children}) => (
-    <VStack
-        w='100%'
-        h='100%'
-        align='center'
-        justify='center'
-    >
-        <Text
-            textStyle='v2.h5-mono'
-            color='#000'
-            textTransform='uppercase'
-            letterSpacing='0.05em'
-        >{children}</Text>
-    </VStack>
+    <Card><Card.Body>{children}</Card.Body></Card>
 );
 
 // renderStage prepares the layout of the stage using subcomponents. Feel free to
@@ -131,71 +101,117 @@ const RoomStatusView = ({children}) => (
 // example; you may use a custom component instead.
 function StageView({roomState}) {
     const {room, participants, audioTracks, isConnecting, error} = roomState;
-    console.log({room, participants, audioTracks, isConnecting, error});
-    const gridRef = React.useRef(null);
-    const [gridTemplateColumns, setGridTemplateColumns] = React.useState('1fr');
 
-    React.useEffect(() => {
-        const gridEl = gridRef.current;
-        if (!gridEl || participants.length === 0) {
-            return;
-        }
-
-        const totalWidth = gridEl.clientWidth;
-        const numCols = Math.ceil(Math.sqrt(participants.length));
-        const colSize = Math.floor(totalWidth / numCols);
-        setGridTemplateColumns(`repeat(${numCols}, minmax(50px, ${colSize}px))`);
-    }, [participants]);
+    // console.log({room, participants, audioTracks, isConnecting, error});
 
     if (isConnecting) {
-        return <RoomStatusView>Connecting...</RoomStatusView>;
+        return <RoomStatusView>Подключение...</RoomStatusView>;
     }
     if (error) {
-        return <RoomStatusView>Error: {error.message}</RoomStatusView>;
+        return <RoomStatusView>Ошибка: {error.message}</RoomStatusView>;
     }
     if (!room) {
-        return <RoomStatusView>Room closed</RoomStatusView>;
+        return <RoomStatusView>Комната закрыта</RoomStatusView>;
     }
 
-    return (
-        <Flex
-            direction='column'
-            justify='center'
-            h='100%'
-            bg='black'
-        >
-            <Grid
-                ref={gridRef}
-                __css={{
-                    display: 'grid',
-                    aspectRatio: '1.77778',
-                    overflow: 'hidden',
-                    background: 'black',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '100%',
-                    gridTemplateColumns,
-                }}
-            >
-                {audioTracks.map((track) => (
-                    <AudioRenderer
-                        track={track}
-                        key={track.sid}
-                    />
-                ))}
-                {participants.map((participant) => (
+    // const data = [...participants, ...participants, ...participants, ...participants, ...participants];
+    const data = participants;
+    let xxlCount = 6;
+    let xlCount = 6;
+    let lgCount = 6;
+    let mdCount = 12;
+
+    // if (participants.length > 2) {
+    if (data.length > 2) {
+        xxlCount = 3;
+        xlCount = 3;
+        lgCount = 4;
+        mdCount = 6;
+    }
+    const handleOff = () => {
+        room.disconnect();
+    };
+    const onToggleMic = () => {
+        const enabled = room.localParticipant.isMicrophoneEnabled;
+        room.localParticipant.setMicrophoneEnabled(!enabled);
+    };
+    const onToggleVideo = () => {
+        const enabled = room.localParticipant.isCameraEnabled;
+        room.localParticipant.setCameraEnabled(!enabled);
+    };
+    const onToggleScreen = () => {
+        const enabled = room.localParticipant.isScreenShareEnabled;
+        room.localParticipant.setScreenShareEnabled(!enabled);
+    };
+
+    return (<Container fluid={true}>
+        <Row className='justify-content-md-center mb-3'>
+            <Col lg={12}>
+                <Card>
+                    <Card.Body>
+                        <Button
+                            variant={room.localParticipant.isMicrophoneEnabled ? 'primary' : 'primary-outline'}
+                            className='mr-3'
+                            onClick={onToggleMic}
+                        >
+                            <i className={`CompassIcon ${room.localParticipant.isMicrophoneEnabled ? 'icon-microphone' : 'icon-microphone-off'}`}/>
+                            {room.localParticipant.isMicrophoneEnabled ? 'Звук включен' : 'Звук выключен'}
+                        </Button>
+                        <Button
+                            variant={room.localParticipant.isCameraEnabled ? 'primary' : 'primary-outline'}
+                            className='mr-3'
+                            onClick={onToggleVideo}
+                        >
+                            <i className='CompassIcon icon-camera-outline '/>
+                            {room.localParticipant.isCameraEnabled ? 'Видео включено' : 'Видео выключено'}
+                        </Button>
+                        <Button
+                            variant={'primary'}
+                            className='mr-3'
+                            onClick={onToggleScreen}
+                        >
+                            <i className='CompassIcon icon-monitor '/>
+                            {room.localParticipant.isScreenShareEnabled ? 'Прекратить показ' : 'Показать экран'}
+                        </Button>
+                        <Button
+                            variant='danger'
+                            onClick={handleOff}
+                        >
+                            <i className='CompassIcon icon-phone-hangup '/>
+                            Отключиться
+                        </Button>
+                    </Card.Body>
+                </Card>
+            </Col>
+        </Row>
+        <Row>
+            {data.map((participant) => (
+                <Col
+                    key={participant.sid}
+                    xxl={xxlCount}
+                    xl={xlCount}
+                    lg={lgCount}
+                    md={mdCount}
+                >
                     <CustomParticipantView
-                        key={participant.sid}
                         participant={participant}
                         showOverlay={true}
                         aspectWidth={16}
                         aspectHeight={9}
                     />
-                ))}
-            </Grid>
-            {/*<ControlsView room={room}/>*/}
-        </Flex>
-    );
+                </Col>
+            ))}
+        </Row>
+        {
+            audioTracks.map((track) => (
+                <AudioRenderer
+                    track={track}
+                    key={track.sid}
+                />
+            ))
+        }
+    </Container>)
+    ;
 }
 
 async function handleConnected(room) {

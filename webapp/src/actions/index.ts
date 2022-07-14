@@ -13,6 +13,8 @@ export function fetchToken(postId:string) {
                 method: 'POST',
                 credentials: 'include',
             }).then((response) => {
+                // @ts-ignore
+                window.__token = response;
                 console.log('_______________response______________');
                 console.log(response);
                 console.log('_______________response______________');

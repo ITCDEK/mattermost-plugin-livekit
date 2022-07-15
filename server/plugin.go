@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	pluginSDK "github.com/mattermost/mattermost-plugin-api"
 	"github.com/mattermost/mattermost-server/v6/model"
 	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/pkg/errors"
 )
 
 // References
@@ -44,32 +47,32 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.sdk = pluginSDK.NewClient(lkp.API, lkp.Driver)
 
 	//Bot
-	// liveBot := &model.Bot{
-	// 	Username:    "livekit",
-	// 	DisplayName: "Live Bot",
-	// 	Description: "A bot account created by the LiveKit plugin",
-	// }
+	liveBot := &model.Bot{
+		Username:    "livekit.bot",
+		DisplayName: "Live Bot",
+		Description: "Created by the LiveKit plugin",
+	}
 
-	// botUserID, err := lkp.sdk.Bot.EnsureBot(liveBot)
-	// if err == nil {
-	// 	lkp.botUserID = botUserID
-	// } else {
-	// 	return errors.Wrap(err, "failed to ensure bot account")
-	// }
+	botUserID, err := lkp.sdk.Bot.EnsureBot(liveBot)
+	if err == nil {
+		lkp.botUserID = botUserID
+	} else {
+		return errors.Wrap(err, "failed to ensure bot account")
+	}
 
-	// bundlePath, err := lkp.API.GetBundlePath()
-	// if err == nil {
-	// 	profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.svg"))
-	// 	if err == nil {
-	// 		if appErr := lkp.API.SetProfileImage(botUserID, profileImage); appErr != nil {
-	// 			return errors.Wrap(appErr, "couldn't set profile image")
-	// 		}
-	// 	} else {
-	// 		return errors.Wrap(err, "couldn't read profile image")
-	// 	}
-	// } else {
-	// 	return errors.Wrap(err, "couldn't get bundle path")
-	// }
+	bundlePath, err := lkp.API.GetBundlePath()
+	if err == nil {
+		profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.svg"))
+		if err == nil {
+			if appErr := lkp.API.SetProfileImage(botUserID, profileImage); appErr != nil {
+				return errors.Wrap(appErr, "couldn't set profile image")
+			}
+		} else {
+			return errors.Wrap(err, "couldn't read profile image")
+		}
+	} else {
+		return errors.Wrap(err, "couldn't get bundle path")
+	}
 
 	command, err := lkp.compileSlashCommand()
 	if err == nil {
@@ -77,14 +80,12 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 		if err == nil {
 			serverURL := fmt.Sprintf("https://%s:%d", lkp.configuration.Host, lkp.configuration.Port)
 			lkp.master = kitSDK.NewRoomServiceClient(serverURL, lkp.configuration.ApiKey, lkp.configuration.ApiValue)
-			lkp.API.LogInfo("api access", "key", lkp.configuration.ApiKey, "value", lkp.configuration.ApiValue)
-			lkp.API.LogInfo("lkp.master assigned", "pointer", lkp.master)
+			lkp.API.LogInfo("LiveKit integration activated")
 			return nil
 		}
 	}
-	lkp.API.LogInfo("LiveKit integration activated")
 
-	return err
+	return errors.Wrap(err, "couldn't compile slash-command")
 }
 
 func (lkp *LiveKitPlugin) OnDeactivate() error {
@@ -131,8 +132,14 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		}{}
 		err := json.NewDecoder(r.Body).Decode(&mvpRequest)
 		if err == nil {
-			if lkp.master == nil {
-				http.Error(w, "lkp.master is nil", http.StatusFailedDependency)
+			post, ae := lkp.API.GetPost(mvpRequest.PostID)
+			if ae != nil {
+				http.Error(w, "Post not found", http.StatusNotFound)
+				return
+			}
+			_, ae = lkp.API.GetChannelMember(post.ChannelId, mvpRequest.PostID)
+			if ae != nil {
+				http.Error(w, "Channel membership check failed", http.StatusExpectationFailed)
 				return
 			}
 			lkp.API.LogInfo("room token requested", "post_id", mvpRequest.PostID)
@@ -170,6 +177,13 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			}
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
+	case "/rooms":
+		roomList, err := lkp.master.ListRooms(context.Background(), &livekit.ListRoomsRequest{})
+		if err == nil {
+			json.NewEncoder(w).Encode(roomList)
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	case "/host":
 		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L324
 		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L484
@@ -206,7 +220,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 							ChannelId: channel.Id,
 							RootId:    roomRequest.RootID,
 							Message:   "I have started a meeting",
-							Type:      "livekit_room",
+							Type:      "custom_livekit",
 							Props: map[string]interface{}{
 								"room_capacity": room.MaxParticipants,
 								"room_name":     room.Name,
@@ -288,8 +302,8 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case "/settings":
 		copy := lkp.configuration
-		// copy.ApiKey = ""
-		// copy.ApiValue = ""
+		copy.ApiKey = "n/a"
+		copy.ApiValue = "n/a"
 		json.NewEncoder(w).Encode(copy)
 	default:
 		http.NotFound(w, r)

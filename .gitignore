@@ -8,3 +8,7 @@ dist/
 
 # Jetbrains
 .idea/
+
+#Mage files
+make
+make.exe

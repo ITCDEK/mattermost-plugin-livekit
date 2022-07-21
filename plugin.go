@@ -1,4 +1,4 @@
-package root
+package main
 
 import (
 	// _ "embed" // Need to embed manifest file

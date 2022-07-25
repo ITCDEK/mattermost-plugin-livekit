@@ -53,6 +53,7 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 		Description: "Created by the LiveKit plugin",
 	}
 
+	lkp.API.LogInfo("Ensuring bot", "name", liveBot.Username)
 	botUserID, err := lkp.sdk.Bot.EnsureBot(liveBot)
 	if err == nil {
 		lkp.botUserID = botUserID
@@ -60,9 +61,10 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 		return errors.Wrap(err, "failed to ensure bot account")
 	}
 
+	lkp.API.LogInfo("Setting bot profile image")
 	bundlePath, err := lkp.API.GetBundlePath()
 	if err == nil {
-		profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.svg"))
+		profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.png")) //SVG format is not supported
 		if err == nil {
 			if appErr := lkp.API.SetProfileImage(botUserID, profileImage); appErr != nil {
 				return errors.Wrap(appErr, "couldn't set profile image")
@@ -74,10 +76,13 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 		return errors.Wrap(err, "couldn't get bundle path")
 	}
 
+	lkp.API.LogInfo("Compiling slash command")
 	command, err := lkp.compileSlashCommand()
 	if err == nil {
+		lkp.API.LogInfo("Registering slash command")
 		err = lkp.API.RegisterCommand(command)
 		if err == nil {
+			lkp.API.LogInfo("slash command registered")
 			serverURL := fmt.Sprintf("https://%s:%d", lkp.configuration.Host, lkp.configuration.Port)
 			lkp.master = kitSDK.NewRoomServiceClient(serverURL, lkp.configuration.ApiKey, lkp.configuration.ApiValue)
 			lkp.API.LogInfo("LiveKit integration activated")
@@ -137,7 +142,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 				http.Error(w, "Post not found", http.StatusNotFound)
 				return
 			}
-			_, ae = lkp.API.GetChannelMember(post.ChannelId, mvpRequest.PostID)
+			_, ae = lkp.API.GetChannelMember(post.ChannelId, userID)
 			if ae != nil {
 				http.Error(w, "Channel membership check failed", http.StatusExpectationFailed)
 				return
@@ -244,8 +249,10 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 						return
 					}
 				}
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
 			}
-			http.Error(w, "Forbidden", http.StatusForbidden)
+			http.Error(w, appErr.DetailedError, http.StatusBadRequest)
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}

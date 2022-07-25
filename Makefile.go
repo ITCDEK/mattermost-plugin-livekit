@@ -37,14 +37,14 @@ func init() {
 		}
 	}
 	if err == nil {
-		fmt.Println("Settings for plugin", pluginSettings.Id, "loaded")
+		fmt.Println("Settings for plugin <", pluginSettings.Id, "> loaded")
 	} else {
 		fmt.Println("plugin.json fail:", err.Error())
 	}
 }
 
 func Deploy() error {
-	mg.Deps(Build)
+	// mg.Deps(Build)
 	// siteURL := os.Getenv("MM_SITEURL")
 	// adminToken := os.Getenv("MM_ADMIN_TOKEN")
 	adminUsername := "Denis"
@@ -52,10 +52,13 @@ func Deploy() error {
 	siteURL := "https://dev-talk.cdek.ru"
 	client := model.NewAPIv4Client(siteURL)
 	// client.SetToken(adminToken)
-	fmt.Printf("Authenticating as %s against %s.", adminUsername, siteURL)
+	fmt.Printf("Authenticating as %s against %s: ", adminUsername, siteURL)
 	_, _, err := client.Login(adminUsername, adminPassword)
-	if err != nil {
-		return fmt.Errorf("failed to login as %s: %w", adminUsername, err)
+	if err == nil {
+		fmt.Printf("Ok\n")
+	} else {
+		fmt.Printf("fail!\n")
+		return err
 	}
 	bundlePath := fmt.Sprintf("./dist/%s-%s.tar.gz", pluginSettings.Id, pluginSettings.Version)
 	pluginBundle, err := os.Open(bundlePath)
@@ -64,30 +67,33 @@ func Deploy() error {
 	}
 	defer pluginBundle.Close()
 
-	fmt.Print("Uploading plugin via API.")
+	fmt.Print("Uploading plugin via API: ")
 	_, _, err = client.UploadPluginForced(pluginBundle)
-	if err != nil {
+	if err == nil {
+		fmt.Printf("Ok\n")
+	} else {
+		fmt.Printf("fail!\n")
 		return fmt.Errorf("failed to upload plugin bundle: %s", err.Error())
 	}
 
-	fmt.Print("Enabling plugin.")
+	fmt.Print("Enabling plugin: ")
 	_, err = client.EnablePlugin(pluginSettings.Id)
-	if err != nil {
-		return fmt.Errorf("failed to enable plugin: %s", err.Error())
+	if err == nil {
+		fmt.Printf("Ok\n")
+	} else {
+		fmt.Printf("fail!\n")
+		return err
 	}
 	return nil
 }
 
 func Build() error {
-	mg.Deps(Bundle)
-	return nil
-}
-
-func Bundle() error {
 	mg.Deps(Compile)
 	destinationDir := "./dist/" + pluginSettings.Id
-	err := sh.Copy("plugin.json", destinationDir)
-	err = sh.Copy("webapp/dist/main.js", destinationDir+"/webapp")
+	os.MkdirAll(destinationDir, 0755)
+	os.MkdirAll(destinationDir + "/webapp", 0755)
+	err := copyFile("plugin.json", destinationDir)
+	err = copyFile("webapp/dist/main.js", destinationDir+"/webapp")
 	err = copyDir("assets", destinationDir)
 	bundleName := fmt.Sprintf("%s-%s.tar.gz", pluginSettings.Id, pluginSettings.Version)
 	err = run("./dist", "tar", "-cvzf", bundleName, pluginSettings.Id)
@@ -112,6 +118,7 @@ func Compile() error {
 		cmd.Env = []string{
 			"GOOS=" + splitted[0],
 			"GOARCH=" + splitted[1],
+			"PATH=" + os.Getenv("PATH"),
 			"HOME=" + os.Getenv("HOME"),
 			"GOPATH=" + os.Getenv("GOPATH"),
 			"GO111MODULE=on",
@@ -170,6 +177,14 @@ func download(url string, path []string) error {
 	return nil
 }
 
+func copyFile(src, dst string) error {
+	if runtime.GOOS == "windows" {
+		return run(".", "copy", src, dst)
+	} else {
+		return run(".", "cp", src, dst)
+	}
+}
+
 func copyDir(src, dst string) error {
 	var err error
 	if runtime.GOOS == "windows" {
@@ -182,6 +197,9 @@ func copyDir(src, dst string) error {
 
 func run(dir, exe string, args ...string) error {
 	cmd := exec.Command(exe, args...)
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+	}
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

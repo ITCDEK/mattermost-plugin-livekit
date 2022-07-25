@@ -5,16 +5,16 @@
     "homepage_url": "https://github.com/ITCDEK/mattermost-plugin-livekit",
     "support_url": "https://github.com/ITCDEK/mattermost-plugin-livekit/issues",
     "release_notes_url": "https://github.com/ITCDEK/mattermost-plugin-livekit/releases/tag/v0.1.0",
-    "icon_path": "assets/bot-icon.svg",
+    "icon_path": "assets/bot-icon.png",
     "version": "0.1.0",
-    "min_server_version": "5.37.0",
+    "min_server_version": "6.5.0",
     "server": {
         "executables": {
-            "linux-amd64": "server/dist/plugin-linux-amd64"
+            "linux-amd64": "server/plugin-linux-amd64"
         }
     },
     "webapp": {
-        "bundle_path": "webapp/dist/main.js"
+        "bundle_path": "webapp/main.js"
     },
     "settings_schema": {
         "settings": [

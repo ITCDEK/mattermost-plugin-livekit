@@ -19,7 +19,7 @@ import {
     LiveKitRoom,
 } from '@livekit/react-components';
 
-import {connect} from 'react-redux';
+import {connect, useSelector, useDispatch} from 'react-redux';
 import Card from 'react-bootstrap/Card';
 import Button from 'react-bootstrap/Button';
 import Container from 'react-bootstrap/Container';
@@ -30,13 +30,15 @@ import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup';
 import {createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
 
 import {fetchToken} from '../actions';
+import {id as pluginId} from '../manifest';
 
 import './style.scss';
 
 const WSS_HOST = 'wss://livekit.k8s-local.cdek.ru';
 
 const RoomView = (props: any) => {
-    // console.log(props);
+    // const pluginState = useSelector((state) => state[`plugins-${pluginId}`]);
+    // console.log(pluginState);
     const [token, setToken] = React.useState('');
     const handleClick = () => {
         props.onFetchToken(props.post.id);
@@ -46,6 +48,8 @@ const RoomView = (props: any) => {
 
             // @ts-ignore
             setToken(window.__token);
+            // setToken(props.tokens.jwt);
+            // console.log(props);
         }, 500);
     };
     return (<>
@@ -61,7 +65,7 @@ const RoomView = (props: any) => {
             (
                 <Card>
                     <LiveKitRoom
-                        url={WSS_HOST}
+                        url={`wss://${props.pluginSettings.Host}:${props.pluginSettings.Port}`}
                         token={token}
                         stageRenderer={StageView}
                         onConnected={(room) => {
@@ -226,5 +230,15 @@ async function handleConnected(room) {
     });
 }
 
-export default connect(null, {onFetchToken: fetchToken})(RoomView);
+function mapStateToProps(state, ownProps) {
+    return {
+        ...ownProps,
+        tokens: state[`plugins-${pluginId}`].tokens,
+        pluginSettings: state[`plugins-${pluginId}`].config,
+        pluginState: state[`plugins-${pluginId}`],
+        // useSVG: !isMinimumServerVersion(getServerVersion(state), 5, 24),
+    };
+}
+
+export default connect(mapStateToProps, {onFetchToken: fetchToken})(RoomView);
 

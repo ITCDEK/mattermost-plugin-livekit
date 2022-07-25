@@ -4,13 +4,14 @@ import {combineReducers} from 'redux';
 
 function tokens(state: object = {}, action: {type: string, data: object}) {
     switch (action.type) {
-    case "STORE":
+    case "TOKEN_RECEIVED":
         let newTokens = {...state};
-        for (let post_id of Object.keys(action.data)) {
-            // @ts-ignore
-            newTokens[post_id] = action.data[post_id]
-        }
-        return newTokens;
+        console.log(state);
+        // @ts-ignore
+        newTokens[action.data.id] = action.data.jwt;
+        console.log(newTokens);
+        // @ts-ignore
+        return action.data;
     default:
         return state;
     }

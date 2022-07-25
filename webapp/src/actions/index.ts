@@ -3,8 +3,8 @@ import Client4 from 'mattermost-redux/client/client4';
 import {DispatchFunc, GetStateFunc, ActionFunc, ActionResult} from 'mattermost-redux/types/actions';
 
 import {id as pluginId} from '../manifest';
-export function fetchToken(postId:string) {
-    return async () => {
+export function fetchToken(postId:string): ActionFunc {
+    return async (dispatch: DispatchFunc): Promise<ActionResult> => {
         try {
             console.log('fetchToken call with postId =', postId);
             const client = new Client4();
@@ -16,15 +16,18 @@ export function fetchToken(postId:string) {
             }).then((response) => {
                 // @ts-ignore
                 window.__token = response;
-                console.log('_______________response______________');
+                console.log('______token response______');
                 console.log(response);
-                console.log('_______________response______________');
+                console.log('______end of response_____');
+                dispatch({type: "TOKEN_RECEIVED", data: {id: postId, jwt: response}});
             });
+            return {data: "Ok"};
         } catch (error) {
             // eslint-disable-next-line no-alert
             alert(`Ошибка ${error}`);
             // eslint-disable-next-line no-console
             console.error(error);
+            return {error};
         }
     };
 }
@@ -58,7 +61,6 @@ export function getSettings(): ActionFunc {
         try {
             const client = new Client4();
             client.doFetch(`/plugins/${pluginId}/settings`, {
-                body: JSON.stringify({}),
                 method: 'GET',
                 credentials: 'include',
             }).then((response) => {

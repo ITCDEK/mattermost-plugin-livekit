@@ -307,8 +307,10 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			}
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
+	case "/fullsettings":
+		json.NewEncoder(w).Encode(lkp.configuration)
 	case "/settings":
-		copy := lkp.configuration
+		copy := *lkp.configuration
 		copy.ApiKey = "n/a"
 		copy.ApiValue = "n/a"
 		json.NewEncoder(w).Encode(copy)

@@ -43,6 +43,14 @@ func init() {
 	}
 }
 
+func Install() error {
+	err := Build()
+	if err == nil {
+		return Deploy()
+	}
+	return err
+}
+
 func Deploy() error {
 	// mg.Deps(Build)
 	// siteURL := os.Getenv("MM_SITEURL")
@@ -91,7 +99,7 @@ func Build() error {
 	mg.Deps(Compile)
 	destinationDir := "./dist/" + pluginSettings.Id
 	os.MkdirAll(destinationDir, 0755)
-	os.MkdirAll(destinationDir + "/webapp", 0755)
+	os.MkdirAll(destinationDir+"/webapp", 0755)
 	err := copyFile("plugin.json", destinationDir)
 	err = copyFile("webapp/dist/main.js", destinationDir+"/webapp")
 	err = copyDir("assets", destinationDir)

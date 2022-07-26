@@ -37,28 +37,15 @@ import './style.scss';
 const WSS_HOST = 'wss://livekit.k8s-local.cdek.ru';
 
 const RoomView = (props: any) => {
-    // const pluginState = useSelector((state) => state[`plugins-${pluginId}`]);
-    // console.log(pluginState);
-    const [token, setToken] = React.useState('');
-    const handleClick = () => {
-        props.onFetchToken(props.post.id);
-        setTimeout(() => {
-            // @ts-ignore
-            console.log('setToken', window.__token);
-
-            // @ts-ignore
-            setToken(window.__token);
-            // setToken(props.tokens.jwt);
-            // console.log(props);
-        }, 500);
-    };
+    const dispatch = useDispatch();
+    const requestToken = () => dispatch(fetchToken(props.post.id));
     return (<>
-        {!token ?
+        {!props.tokens[props.post.id] ?
             <Card>
                 <Card.Body>
                     <Button
                         variant='primary'
-                        onClick={handleClick}
+                        onClick={requestToken}
                     >Подключиться</Button>
                 </Card.Body>
             </Card> :
@@ -66,7 +53,7 @@ const RoomView = (props: any) => {
                 <Card>
                     <LiveKitRoom
                         url={`wss://${props.pluginSettings.Host}:${props.pluginSettings.Port}`}
-                        token={token}
+                        token={props.tokens[props.post.id]}
                         stageRenderer={StageView}
                         onConnected={(room) => {
                             handleConnected(room);
@@ -233,6 +220,7 @@ async function handleConnected(room) {
 function mapStateToProps(state, ownProps) {
     return {
         ...ownProps,
+        global: state,
         tokens: state[`plugins-${pluginId}`].tokens,
         pluginSettings: state[`plugins-${pluginId}`].config,
         pluginState: state[`plugins-${pluginId}`],

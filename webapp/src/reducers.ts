@@ -5,13 +5,13 @@ import {combineReducers} from 'redux';
 function tokens(state: object = {}, action: {type: string, data: object}) {
     switch (action.type) {
     case "TOKEN_RECEIVED":
-        let newTokens = {...state};
+        let newSet = {...state};
         console.log(state);
         // @ts-ignore
-        newTokens[action.data.id] = action.data.jwt;
-        console.log(newTokens);
+        newSet[action.data.id] = action.data.jwt;
+        console.log(newSet);
         // @ts-ignore
-        return action.data;
+        return newSet;
     default:
         return state;
     }

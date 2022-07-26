@@ -13,14 +13,7 @@ export function fetchToken(postId:string): ActionFunc {
                 body: JSON.stringify({post_id: postId}),
                 method: 'POST',
                 credentials: 'include',
-            }).then((response) => {
-                // @ts-ignore
-                window.__token = response;
-                console.log('______token response______');
-                console.log(response);
-                console.log('______end of response_____');
-                dispatch({type: "TOKEN_RECEIVED", data: {id: postId, jwt: response}});
-            });
+            }).then((response) => dispatch({type: "TOKEN_RECEIVED", data: {id: postId, jwt: response}}));
             return {data: "Ok"};
         } catch (error) {
             // eslint-disable-next-line no-alert

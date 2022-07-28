@@ -49,7 +49,7 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	//Bot
 	liveBot := &model.Bot{
 		Username:    "livekit.bot",
-		DisplayName: "Live Bot",
+		DisplayName: "Broadcasting",
 		Description: "Created by the LiveKit plugin",
 	}
 
@@ -139,12 +139,17 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		if err == nil {
 			post, ae := lkp.API.GetPost(mvpRequest.PostID)
 			if ae != nil {
-				http.Error(w, "Post not found", http.StatusNotFound)
+				http.Error(w, ae.DetailedError, http.StatusNotFound)
 				return
 			}
 			_, ae = lkp.API.GetChannelMember(post.ChannelId, userID)
 			if ae != nil {
-				http.Error(w, "Channel membership check failed", http.StatusExpectationFailed)
+				http.Error(w, ae.DetailedError, http.StatusExpectationFailed)
+				return
+			}
+			tokenUser, ae := lkp.API.GetUser(userID)
+			if ae != nil {
+				http.Error(w, ae.DetailedError, http.StatusExpectationFailed)
 				return
 			}
 			lkp.API.LogInfo("room token requested", "post_id", mvpRequest.PostID)
@@ -174,7 +179,8 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			lkp.API.LogInfo("room assigned", "pointer", room, "name", room.Name)
 			accessToken := auth.NewAccessToken(lkp.configuration.ApiKey, lkp.configuration.ApiValue)
 			grant := &auth.VideoGrant{RoomJoin: true, Room: room.Name}
-			accessToken.AddGrant(grant).SetIdentity(userID).SetValidFor(time.Hour)
+			userName := tokenUser.GetDisplayName("full_name")
+			accessToken.AddGrant(grant).SetValidFor(time.Hour).SetIdentity(userID).SetName(userName)
 			tokenReply, err := accessToken.ToJWT()
 			if err == nil {
 				json.NewEncoder(w).Encode(tokenReply)
@@ -197,10 +203,8 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		// https://stackoverflow.com/questions/57096382/response-from-interactive-button-post-is-ignored-in-mattermost
 		roomRequest := struct {
 			ChannelID string `json:"channel_id"`
-			PartyOf   int    `json:"party"`
-			Personal  bool   `json:"personal"`
-			Topic     string `json:"topic"`
-			RootID    string `json:"root_id"`
+			Capacity  int    `json:"capacity"`
+			Message   string `json:"message"`
 		}{}
 		err := json.NewDecoder(r.Body).Decode(&roomRequest)
 		if err == nil {
@@ -210,46 +214,29 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 				if appErr == nil {
 					info := fmt.Sprintf("User %s requested new live room for channel %s", member.UserId, member.ChannelId)
 					lkp.API.LogInfo(info)
-					room, err := lkp.master.CreateRoom(
-						context.Background(),
-						&livekit.CreateRoomRequest{
-							Name:         roomRequest.Topic,
-							Metadata:     roomRequest.ChannelID,
-							EmptyTimeout: 300,
+					post := &model.Post{
+						UserId:    lkp.botUserID,
+						ChannelId: channel.Id,
+						Message:   roomRequest.Message,
+						Type:      "custom_livekit",
+						Props: map[string]interface{}{
+							"room_capacity": roomRequest.Capacity,
+							"room_host":     member.UserId,
+							// "attachments": []*model.SlackAttachment{&model.SlackAttachment{}},
 						},
-					)
-					if err == nil {
-						lkp.API.LogInfo("room created", "session id", room.Sid)
-						post := &model.Post{
-							UserId:    lkp.botUserID,
-							ChannelId: channel.Id,
-							RootId:    roomRequest.RootID,
-							Message:   "I have started a meeting",
-							Type:      "custom_livekit",
-							Props: map[string]interface{}{
-								"room_capacity": room.MaxParticipants,
-								"room_name":     room.Name,
-								"room_sid":      room.Sid,
-								"room_host":     member.UserId,
-								"room_server":   0,
-								// "meeting_status":           zoom.WebhookStatusStarted,
-								// "meeting_personal":         false,
-								// "attachments":              []*model.SlackAttachment{&slackAttachment},
-							},
-						}
-						// lkp.API.SendEphemeralPost(lkp.bot.UserId, post)
-						newRoomPost, appErr := lkp.API.CreatePost(post)
-						if appErr == nil {
-							lkp.API.LogInfo("room post created with ID =", newRoomPost.Id)
-							http.Error(w, "OK", http.StatusOK)
-						} else {
-							lkp.API.LogInfo(appErr.DetailedError)
-							http.Error(w, appErr.DetailedError, http.StatusInternalServerError)
-						}
-						return
 					}
+					// lkp.API.SendEphemeralPost(lkp.bot.UserId, post)
+					newRoomPost, appErr := lkp.API.CreatePost(post)
+					if appErr == nil {
+						lkp.API.LogInfo("room post created with ID =", newRoomPost.Id)
+						http.Error(w, "OK", http.StatusOK)
+					} else {
+						lkp.API.LogInfo(appErr.DetailedError)
+						http.Error(w, appErr.DetailedError, http.StatusInternalServerError)
+					}
+					return
 				}
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				http.Error(w, appErr.DetailedError, http.StatusForbidden)
 				return
 			}
 			http.Error(w, appErr.DetailedError, http.StatusBadRequest)
@@ -307,8 +294,6 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			}
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
-	case "/fullsettings":
-		json.NewEncoder(w).Encode(lkp.configuration)
 	case "/settings":
 		copy := *lkp.configuration
 		copy.ApiKey = "n/a"

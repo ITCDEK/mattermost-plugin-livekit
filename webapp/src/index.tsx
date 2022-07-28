@@ -11,7 +11,7 @@ import ChannelHeaderIcon from './components/channel-header-icon';
 
 // eslint-disable-next-line import/no-unresolved
 import {PluginRegistry} from './types/mattermost-webapp';
-import VideoMessage from './components/VideoMessage';
+import LivePost from './components/LivePost';
 
 export default class LiveKitPlugin {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
@@ -34,7 +34,7 @@ export default class LiveKitPlugin {
             'Start LiveKit Meeting',
         );
 
-        registry.registerPostTypeComponent('custom_livekit', VideoMessage);
+        registry.registerPostTypeComponent('custom_livekit', LivePost);
         registry.registerReducer(reducer);
         store.dispatch(getSettings());
 

@@ -2,15 +2,31 @@ import {combineReducers} from 'redux';
 
 // import {Post} from 'mattermost-redux/types/posts';
 
+function liveRooms(state: object = {}, action: {type: string, data: string}) {
+    let newLiveSet = {...state};
+    switch (action.type) {
+    case "GO_LIVE":
+        // @ts-ignore
+        newLiveSet[action.data] = true;
+        console.log(newLiveSet);
+        return newLiveSet;
+    case "GO_STILL":
+        // @ts-ignore
+        newLiveSet[action.data] = false;
+        console.log(newLiveSet);
+        return newLiveSet;
+    default:
+        return state;
+    }
+}
+
 function tokens(state: object = {}, action: {type: string, data: object}) {
     switch (action.type) {
     case "TOKEN_RECEIVED":
         let newSet = {...state};
-        console.log(state);
         // @ts-ignore
         newSet[action.data.id] = action.data.jwt;
         console.log(newSet);
-        // @ts-ignore
         return newSet;
     default:
         return state;
@@ -28,6 +44,7 @@ function config(state: object = {}, action: {type: string, data: object}) {
 }
 
 export default combineReducers({
+    liveRooms,
     tokens,
     config
 });

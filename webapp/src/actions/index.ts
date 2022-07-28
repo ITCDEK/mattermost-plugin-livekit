@@ -1,8 +1,12 @@
 import {Store, Action, Dispatch} from 'redux';
+import {useSelector} from 'react-redux';
 import Client4 from 'mattermost-redux/client/client4';
 import {DispatchFunc, GetStateFunc, ActionFunc, ActionResult} from 'mattermost-redux/types/actions';
+import {getCurrentUserLocale} from 'mattermost-redux/selectors/entities/i18n';
+import {getCurrentUser} from 'mattermost-redux/selectors/entities/users';
 
 import {id as pluginId} from '../manifest';
+
 export function fetchToken(postId:string): ActionFunc {
     return async (dispatch: DispatchFunc): Promise<ActionResult> => {
         try {
@@ -13,7 +17,10 @@ export function fetchToken(postId:string): ActionFunc {
                 body: JSON.stringify({post_id: postId}),
                 method: 'POST',
                 credentials: 'include',
-            }).then((response) => dispatch({type: "TOKEN_RECEIVED", data: {id: postId, jwt: response}}));
+            }).then((response) => {
+                dispatch({type: "TOKEN_RECEIVED", data: {id: postId, jwt: response}});
+                dispatch({type: "GO_LIVE", data: postId});
+            });
             return {data: "Ok"};
         } catch (error) {
             // eslint-disable-next-line no-alert
@@ -30,7 +37,7 @@ export function postMeeting(channelId:string): ActionFunc {
         try {
             const client = new Client4();
             client.doFetch(`/plugins/${pluginId}/room`, {
-                body: JSON.stringify({channel_id: channelId}),
+                body: JSON.stringify({channel_id: channelId, message: getTranslation("room.topic")}),
                 method: 'POST',
                 credentials: 'include',
             }).then((response) => {
@@ -70,4 +77,24 @@ export function getSettings(): ActionFunc {
             return {error};
         }
     };
+}
+
+export function getTranslation(id: string) {
+    const currentUser = useSelector(getCurrentUser);
+    const userName = currentUser.nickname;
+    const locale = useSelector(getCurrentUserLocale);
+    const templates = {
+        "room.connect": {
+            ru: "Войти",
+            en: "Enter",
+        },
+        "room.topic": {
+            ru: `${userName} создал(а) комнату для Вас`,
+            en: `${userName} created live room for you`,
+        },
+    };
+    console.log(currentUser);
+    console.log(`locale = ${locale}`);
+    // @ts-ignore
+    return templates[id][locale];
 }

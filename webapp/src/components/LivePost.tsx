@@ -20,6 +20,7 @@ import {
 } from '@livekit/react-components';
 
 import {connect, useSelector, useDispatch} from 'react-redux';
+import {defineMessages, useIntl } from 'react-intl';
 import Card from 'react-bootstrap/Card';
 import Button from 'react-bootstrap/Button';
 import Container from 'react-bootstrap/Container';
@@ -29,26 +30,30 @@ import ToggleButton from 'react-bootstrap/ToggleButton';
 import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup';
 import {createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
 
-import {fetchToken} from '../actions';
+import {fetchToken, getTranslation} from '../actions';
 import {id as pluginId} from '../manifest';
+
+import StillPost from './StillPost';
 
 import './style.scss';
 
-const WSS_HOST = 'wss://livekit.k8s-local.cdek.ru';
-
 const RoomView = (props: any) => {
     const dispatch = useDispatch();
-    const requestToken = () => dispatch(fetchToken(props.post.id));
+    const goLive = () => props.tokens[props.post.id] ? dispatch({type: "GO_LIVE", data: props.post.id}) : dispatch(fetchToken(props.post.id));
+    console.log(props.post.message);
+    console.log(props.post.props.room_capacity);
+    console.log(props.post.props.room_host);
     return (<>
-        {!props.tokens[props.post.id] ?
-            <Card>
-                <Card.Body>
-                    <Button
-                        variant='primary'
-                        onClick={requestToken}
-                    >Подключиться</Button>
-                </Card.Body>
-            </Card> :
+        {!props.liveRooms[props.post.id] ?
+            <StillPost post = {props.post} token = {props.tokens[props.post.id]}></StillPost> :
+            // <Card>
+            //     <Card.Body>
+            //         <Button
+            //             variant='primary'
+            //             onClick={goLive}
+            //         >{ getTranslation("room.connect")}</Button>
+            //     </Card.Body>
+            // </Card> :
             (
                 <Card>
                     <LiveKitRoom
@@ -91,6 +96,7 @@ const RoomStatusView = ({children}) => (
 // modify as you see fit. It uses the built-in ParticipantView component in this
 // example; you may use a custom component instead.
 function StageView({roomState}) {
+    // const dispatch = useDispatch();
     const {room, participants, audioTracks, isConnecting, error} = roomState;
 
     // console.log({room, participants, audioTracks, isConnecting, error});
@@ -121,6 +127,7 @@ function StageView({roomState}) {
     }
     const handleOff = () => {
         room.disconnect();
+        // dispatch({type: "GO_STILL", data: props.post.id});
     };
     const onToggleMic = () => {
         const enabled = room.localParticipant.isMicrophoneEnabled;
@@ -220,10 +227,10 @@ async function handleConnected(room) {
 function mapStateToProps(state, ownProps) {
     return {
         ...ownProps,
-        global: state,
         tokens: state[`plugins-${pluginId}`].tokens,
+        liveRooms: state[`plugins-${pluginId}`].liveRooms,
         pluginSettings: state[`plugins-${pluginId}`].config,
-        pluginState: state[`plugins-${pluginId}`],
+        // currentLocale: getCurrentUserLocale(state),
         // useSVG: !isMinimumServerVersion(getServerVersion(state), 5, 24),
     };
 }

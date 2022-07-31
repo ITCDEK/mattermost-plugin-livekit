@@ -1,19 +1,29 @@
 import React from 'react';
-import {connect} from 'react-redux';
+import {connect, useSelector, useDispatch} from 'react-redux';
 import {getTheme} from 'mattermost-redux/selectors/entities/preferences';
 import {makeStyleFromTheme} from 'mattermost-redux/utils/theme_utils';
 
-import {getTranslation} from '../actions';
+import {fetchToken, getTranslation} from '../actions';
 import {id as pluginId} from '../manifest';
 
-const StillPost = (props) => {
+const StillRoom = (props) => {
+    console.log(props.theme);
+    const dispatch = useDispatch();
     const buttonLabel = getTranslation("room.connect");
     const style = getStyle(props.theme);
+    const goLive = () => props.token ? dispatch({type: "GO_LIVE", data: props.post.id}) : dispatch(fetchToken(props.post.id));
+    const stopPropagation = (e) => {
+        e.persist();
+        e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        console.log(e);
+    };
     return (
-        <div style={style.wrapper}>
+        <div style={style.wrapper} onClick = {stopPropagation}>
             <div style={style.message}>{props.post.message}</div>
             <div style={style.buttonWrapper}>
-                <div style={style.connectButton} className = "btn btn-lg btn-primary">{buttonLabel}</div>
+                <div style={style.connectButton} className = "btn btn-lg btn-primary" onClick = {goLive}>{buttonLabel}</div>
             </div>
         </div>
     );
@@ -24,7 +34,8 @@ const getStyle = makeStyleFromTheme((theme) => {
     return {
         wrapper: {
             width: "100%",
-            display: "flex"
+            display: "flex",
+            marginTop: "2vh",
         },
         message: {
             width: "80%",
@@ -35,9 +46,13 @@ const getStyle = makeStyleFromTheme((theme) => {
         },
         buttonWrapper: {
             width: "20%",
+            display: "flex",
+            justifyContent: "center",
         },
         connectButton: {
-            // color: theme.buttonColor,
+            color: theme.buttonColor,
+            // backgroundColor: theme.buttonBg,
+            backgroundColor: "coral",
         },
         button: {
             // color: theme.buttonColor,
@@ -56,4 +71,4 @@ function mapStateToProps(state, ownProps) {
     };
 }
 
-export default connect(mapStateToProps)(StillPost);
+export default connect(mapStateToProps)(StillRoom);

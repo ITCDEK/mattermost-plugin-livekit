@@ -33,8 +33,10 @@ export function fetchToken(postId:string): ActionFunc {
 }
 
 export function postMeeting(channelId:string): ActionFunc {
-    return async (dispatch: DispatchFunc): Promise<ActionResult> => {
+    return async (dispatch: DispatchFunc, getState: GetStateFunc): Promise<ActionResult> => {
         try {
+            const state = getState();
+            console.log(state);
             const client = new Client4();
             client.doFetch(`/plugins/${pluginId}/room`, {
                 body: JSON.stringify({channel_id: channelId, message: getTranslation("room.topic")}),
@@ -80,9 +82,14 @@ export function getSettings(): ActionFunc {
 }
 
 export function getTranslation(id: string) {
-    const currentUser = useSelector(getCurrentUser);
+    // @ts-ignore
+    const store = window.plugins[pluginId].store;
+    const state = store.getState();
+    const currentUser = getCurrentUser(state);
     const userName = currentUser.nickname;
-    const locale = useSelector(getCurrentUserLocale);
+    // console.log(userName);
+    const locale = getCurrentUserLocale(state);
+    console.log(`locale = ${locale}`);
     const templates = {
         "room.connect": {
             ru: "Войти",
@@ -93,8 +100,6 @@ export function getTranslation(id: string) {
             en: `${userName} created live room for you`,
         },
     };
-    console.log(currentUser);
-    console.log(`locale = ${locale}`);
     // @ts-ignore
     return templates[id][locale];
 }

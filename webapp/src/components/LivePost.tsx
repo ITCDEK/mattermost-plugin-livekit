@@ -33,19 +33,21 @@ import {createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit
 import {fetchToken, getTranslation} from '../actions';
 import {id as pluginId} from '../manifest';
 
-import StillPost from './StillPost';
+import StillRoom from './StillRoom';
 
 import './style.scss';
 
 const RoomView = (props: any) => {
-    const dispatch = useDispatch();
-    const goLive = () => props.tokens[props.post.id] ? dispatch({type: "GO_LIVE", data: props.post.id}) : dispatch(fetchToken(props.post.id));
     console.log(props.post.message);
     console.log(props.post.props.room_capacity);
     console.log(props.post.props.room_host);
     return (<>
         {!props.liveRooms[props.post.id] ?
-            <StillPost post = {props.post} token = {props.tokens[props.post.id]}></StillPost> :
+            <StillRoom
+                post = {props.post}
+                token = {props.tokens[props.post.id]}
+                theme = {props.theme}>
+            </StillRoom> :
             // <Card>
             //     <Card.Body>
             //         <Button
@@ -96,7 +98,7 @@ const RoomStatusView = ({children}) => (
 // modify as you see fit. It uses the built-in ParticipantView component in this
 // example; you may use a custom component instead.
 function StageView({roomState}) {
-    // const dispatch = useDispatch();
+    const dispatch = useDispatch();
     const {room, participants, audioTracks, isConnecting, error} = roomState;
 
     // console.log({room, participants, audioTracks, isConnecting, error});
@@ -127,7 +129,8 @@ function StageView({roomState}) {
     }
     const handleOff = () => {
         room.disconnect();
-        // dispatch({type: "GO_STILL", data: props.post.id});
+        console.log("", this);
+        dispatch({type: "GO_STILL", data: props.post.id});
     };
     const onToggleMic = () => {
         const enabled = room.localParticipant.isMicrophoneEnabled;

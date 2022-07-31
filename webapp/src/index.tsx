@@ -14,6 +14,8 @@ import {PluginRegistry} from './types/mattermost-webapp';
 import LivePost from './components/LivePost';
 
 export default class LiveKitPlugin {
+    // @ts-ignore
+    store: Store;
     // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
     public async initialize(registry: PluginRegistry, store: Store<GlobalState, Action<Record<string, unknown>>>) {
         console.log('-----------------------------------------------');
@@ -25,6 +27,7 @@ export default class LiveKitPlugin {
 
         // @ts-ignore
         window._store = store;
+        this.store = store;
         registry.registerChannelHeaderButtonAction(
             <ChannelHeaderIcon/>,
             (channel) => {

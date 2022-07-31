@@ -7,7 +7,6 @@ import {fetchToken, getTranslation} from '../actions';
 import {id as pluginId} from '../manifest';
 
 const StillRoom = (props) => {
-    console.log(props.theme);
     const dispatch = useDispatch();
     const buttonLabel = getTranslation("room.connect");
     const style = getStyle(props.theme);

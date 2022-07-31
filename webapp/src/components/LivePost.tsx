@@ -30,7 +30,7 @@ import ToggleButton from 'react-bootstrap/ToggleButton';
 import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup';
 import {createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
 
-import {fetchToken, getTranslation} from '../actions';
+import {fetchToken, getTranslation, deletePost} from '../actions';
 import {id as pluginId} from '../manifest';
 
 import StillRoom from './StillRoom';
@@ -38,7 +38,12 @@ import StillRoom from './StillRoom';
 import './style.scss';
 
 const RoomView = (props: any) => {
-    console.log(props.post.message);
+    const dispatch = useDispatch();
+    const ttl = Math.abs((new Date() - new Date(props.post.create_at)) / (1000 * 60 *60));
+    if (ttl > 12) {
+        console.log(`liveKit post is ${ttl} hour(s) old, deleting...`);
+        dispatch(deletePost(props.post.id));
+    }
     console.log(props.post.props.room_capacity);
     console.log(props.post.props.room_host);
     return (<>
@@ -129,8 +134,7 @@ function StageView({roomState}) {
     }
     const handleOff = () => {
         room.disconnect();
-        console.log("", this);
-        dispatch({type: "GO_STILL", data: props.post.id});
+        dispatch({type: "GO_STILL", data: "pass post.id here"});
     };
     const onToggleMic = () => {
         const enabled = room.localParticipant.isMicrophoneEnabled;

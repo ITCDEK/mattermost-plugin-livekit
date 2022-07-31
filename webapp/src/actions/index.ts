@@ -35,8 +35,6 @@ export function fetchToken(postId:string): ActionFunc {
 export function postMeeting(channelId:string): ActionFunc {
     return async (dispatch: DispatchFunc, getState: GetStateFunc): Promise<ActionResult> => {
         try {
-            const state = getState();
-            console.log(state);
             const client = new Client4();
             client.doFetch(`/plugins/${pluginId}/room`, {
                 body: JSON.stringify({channel_id: channelId, message: getTranslation("room.topic")}),
@@ -50,6 +48,24 @@ export function postMeeting(channelId:string): ActionFunc {
                     type: "ROOM_HOSTED",
                     data: response
                 });
+            });
+            return {data: "Ok"};
+        } catch (error) {
+            return {error};
+        }
+    };
+}
+
+export function deletePost(postId:string): ActionFunc {
+    return async (dispatch: DispatchFunc, getState: GetStateFunc): Promise<ActionResult> => {
+        try {
+            const client = new Client4();
+            client.doFetch(`/plugins/${pluginId}/delete`, {
+                body: JSON.stringify({post_id: postId}),
+                method: 'POST',
+                credentials: 'include',
+            }).then((response) => {
+                // @ts-ignore
             });
             return {data: "Ok"};
         } catch (error) {

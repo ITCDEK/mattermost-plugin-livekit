@@ -273,24 +273,22 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 	case "/delete":
 		var deleteRequest map[string]string
 		err := json.NewDecoder(r.Body).Decode(&deleteRequest)
-		postID, found := deleteRequest["postID"]
+		postID, found := deleteRequest["post_id"]
 		if err == nil && found {
 			info := fmt.Sprintf("User %s requested room deletion from post [%s]", userID, postID)
 			lkp.API.LogInfo(info)
 			post, appErr := lkp.API.GetPost(postID)
 			postHost := post.GetProp("room_host").(string)
-			roomName := post.GetProp("room_name").(string)
 			if appErr == nil && postHost == userID {
-				deletionRequest := livekit.DeleteRoomRequest{Room: roomName}
-				result, err := lkp.master.DeleteRoom(context.Background(), &deletionRequest)
-				if err == nil {
-					appErr = lkp.API.DeletePost(post.Id)
-					if appErr == nil {
-						http.Error(w, "OK", http.StatusOK)
-						return
-					}
+				// deletionRequest := livekit.DeleteRoomRequest{Room: post.Id}
+				// result, err := lkp.master.DeleteRoom(context.Background(), &deletionRequest)
+				// lkp.API.LogInfo(result.String())
+				appErr = lkp.API.DeletePost(post.Id)
+				if appErr == nil {
+					http.Error(w, "OK", http.StatusOK)
+					return
 				}
-				lkp.API.LogInfo(result.String())
+				err = fmt.Errorf("%s", appErr.DetailedError)
 			}
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)

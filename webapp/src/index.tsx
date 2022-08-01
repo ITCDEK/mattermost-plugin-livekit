@@ -48,15 +48,8 @@ export default class LiveKitPlugin {
                 topicAndN = topicAndN.substring(1);
                 const quotesIndex = topicAndN.indexOf('"');
                 if (quotesIndex > 0) {
-                    const data = {
-                        // channel_id: args.channel_id,
-                        topic: topicAndN.substring(0, quotesIndex),
-                        maxParticipants: 0
-                    };
-                    if (quotesIndex + 2 < topicAndN.length) data.maxParticipants = Number(topicAndN.substring(quotesIndex + 2));
-                    console.log(data);
-                    return {message: fullCmd, args};
                     // return {message: `/liveroom "${JSON.stringify(data)}"`, args};
+                    return {message: fullCmd, args};
                 }
             }
             return {error: {message: 'This command should be formatted as: /liveroom "room topic" N'}};

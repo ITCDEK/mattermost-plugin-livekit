@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,13 +104,13 @@ func (lkp *LiveKitPlugin) OnDeactivate() error {
 
 func (lkp *LiveKitPlugin) compileSlashCommand() (*model.Command, error) {
 	// https://developers.mattermost.com/integrate/admin-guide/admin-slash-commands/
-	acData := model.NewAutocompleteData("call", "[command]", "Start a LiveKit meeting in current channel. Other available commands: start, help, settings")
-	start := model.NewAutocompleteData("start", "[topic]", "Start a new meeting in the current channel")
-	start.AddTextArgument("(optional) The topic of the new meeting", "[topic]", "")
-	acData.AddCommand(start)
+	acData := model.NewAutocompleteData("liveroom", "[topic]", "Start a LiveKit meeting in current channel. Topic should be provided in double quotes.")
+	// start := model.NewAutocompleteData("start", "[topic]", "Start a new meeting in the current channel")
+	// start.AddTextArgument("(optional) The topic of the new meeting", "[topic]", "")
+	// acData.AddCommand(start)
 
 	command := &model.Command{
-		Trigger:          "call",
+		Trigger:          "liveroom",
 		AutoComplete:     true,
 		AutoCompleteDesc: "Start a LiveKit meeting in current channel. Other available commands: start, help, settings",
 		AutoCompleteHint: "[command]",
@@ -116,6 +118,55 @@ func (lkp *LiveKitPlugin) compileSlashCommand() (*model.Command, error) {
 		// AutocompleteIconData: iconData,
 	}
 	return command, nil
+}
+
+func (lkp *LiveKitPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
+	response := &model.CommandResponse{ResponseType: model.CommandResponseTypeEphemeral}
+	// fields := strings.Fields(args.Command)
+
+	splitted := strings.Split(args.Command, "\"")
+	if len(splitted) > 1 && splitted[0] == "/liveroom " {
+		maxParticipants := uint32(0)
+		topic := splitted[1]
+		n := strings.ReplaceAll(splitted[2], " ", "")
+		if len(splitted) == 3 && len(n) > 0 {
+			integer, err := strconv.Atoi(n)
+			if err != nil {
+				response.Text = err.Error()
+				return response, nil
+			}
+			maxParticipants = uint32(integer)
+		}
+		lkp.API.LogInfo("creating rom", "topic", topic, "n", maxParticipants)
+		appErr := lkp.createPost(args.ChannelId, topic, maxParticipants)
+		if appErr == nil {
+			response.Text = fmt.Sprintf("Creating room with topic = %s; maxParticipants = %d", topic, maxParticipants)
+		} else {
+			response.Text = fmt.Sprintf("Room creation failed: %s", appErr.DetailedError)
+		}
+	}
+	return response, nil
+}
+
+func (lkp *LiveKitPlugin) createPost(channelID, text string, maxParticipants uint32) *model.AppError {
+	post := &model.Post{
+		UserId:    lkp.botUserID,
+		ChannelId: channelID,
+		Message:   text,
+		Type:      "custom_livekit",
+		Props: map[string]interface{}{
+			"room_capacity": maxParticipants,
+			// "room_host":     member.UserId,
+			// "attachments": []*model.SlackAttachment{&model.SlackAttachment{}},
+		},
+	}
+	// lkp.API.SendEphemeralPost(lkp.bot.UserId, post)
+	newRoomPost, appErr := lkp.API.CreatePost(post)
+	if appErr == nil {
+		lkp.API.LogInfo("room created", "id", newRoomPost.Id)
+		return nil
+	}
+	return appErr
 }
 
 // ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
@@ -161,12 +212,15 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 				room = roomList.Rooms[0]
 				lkp.API.LogInfo("room found", "name", room.Name)
 			} else {
+				n := post.GetProp("room_capacity").(float64)
+				castedN := uint32(n)
 				newRoom, err := lkp.master.CreateRoom(
 					context.Background(),
 					&livekit.CreateRoomRequest{
-						Name:         mvpRequest.PostID,
-						Metadata:     userID,
-						EmptyTimeout: 300,
+						Name:            mvpRequest.PostID,
+						Metadata:        userID,
+						EmptyTimeout:    300,
+						MaxParticipants: castedN,
 					},
 				)
 				if err == nil {
@@ -199,11 +253,11 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L324
 		// https://github.com/matterpoll/matterpoll/blob/master/server/plugin/api.go#L484
 		// lkp.API.SendEphemeralPost(userID, &model.Post{})
-	case "/room":
+	case "/create":
 		// https://stackoverflow.com/questions/57096382/response-from-interactive-button-post-is-ignored-in-mattermost
 		roomRequest := struct {
 			ChannelID string `json:"channel_id"`
-			Capacity  int    `json:"capacity"`
+			Capacity  uint32 `json:"capacity"`
 			Message   string `json:"message"`
 		}{}
 		err := json.NewDecoder(r.Body).Decode(&roomRequest)
@@ -214,24 +268,11 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 				if appErr == nil {
 					info := fmt.Sprintf("User %s requested new live room for channel %s", member.UserId, member.ChannelId)
 					lkp.API.LogInfo(info)
-					post := &model.Post{
-						UserId:    lkp.botUserID,
-						ChannelId: channel.Id,
-						Message:   roomRequest.Message,
-						Type:      "custom_livekit",
-						Props: map[string]interface{}{
-							"room_capacity": roomRequest.Capacity,
-							"room_host":     member.UserId,
-							// "attachments": []*model.SlackAttachment{&model.SlackAttachment{}},
-						},
-					}
-					// lkp.API.SendEphemeralPost(lkp.bot.UserId, post)
-					newRoomPost, appErr := lkp.API.CreatePost(post)
+					appErr = lkp.createPost(roomRequest.ChannelID, roomRequest.Message, roomRequest.Capacity)
 					if appErr == nil {
-						lkp.API.LogInfo("room post created with ID =", newRoomPost.Id)
 						http.Error(w, "OK", http.StatusOK)
 					} else {
-						lkp.API.LogInfo(appErr.DetailedError)
+						lkp.API.LogInfo("post creation failed", "reason", appErr.DetailedError)
 						http.Error(w, appErr.DetailedError, http.StatusInternalServerError)
 					}
 					return

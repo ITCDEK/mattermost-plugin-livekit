@@ -99,21 +99,21 @@ export function getSettings(): ActionFunc {
 
 export function getTranslation(id: string) {
     // @ts-ignore
-    const store = window.plugins[pluginId].store;
-    const state = store.getState();
+    const state = window.plugins[pluginId].store.getState();
     const currentUser = getCurrentUser(state);
-    const userName = currentUser.nickname;
-    // console.log(userName);
-    const locale = getCurrentUserLocale(state);
-    console.log(`locale = ${locale}`);
+    // console.log(currentUser);
+    const supportedLocales = ["en", "ru"];
+    let locale = getCurrentUserLocale(state);
+    // console.log(`locale = ${locale}`);
+    locale = supportedLocales.includes(locale) ? locale : "en";
     const templates = {
         "room.connect": {
             ru: "Войти",
             en: "Enter",
         },
         "room.topic": {
-            ru: `${userName} создал(а) комнату для Вас`,
-            en: `${userName} created live room for you`,
+            ru: `${currentUser.nickname} создал(а) комнату`,
+            en: `${currentUser.nickname} created live room`,
         },
     };
     // @ts-ignore

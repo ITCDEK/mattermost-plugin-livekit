@@ -36,6 +36,31 @@ export default class LiveKitPlugin {
             'Start LiveKit Meeting',
             'Start LiveKit Meeting',
         );
+        
+        registry.registerSlashCommandWillBePostedHook(async (message, args) => {
+            const fullCmd = message.trim();
+            const Cmd = fullCmd.substring(0, fullCmd.indexOf(' '));
+            let topicAndN = fullCmd.substring(fullCmd.indexOf(' ') + 1);
+            if (Cmd !== '/liveroom') {
+                return {message, args};
+            }
+            if (topicAndN[0] == '"') {
+                topicAndN = topicAndN.substring(1);
+                const quotesIndex = topicAndN.indexOf('"');
+                if (quotesIndex > 0) {
+                    const data = {
+                        // channel_id: args.channel_id,
+                        topic: topicAndN.substring(0, quotesIndex),
+                        maxParticipants: 0
+                    };
+                    if (quotesIndex + 2 < topicAndN.length) data.maxParticipants = Number(topicAndN.substring(quotesIndex + 2));
+                    console.log(data);
+                    return {message: fullCmd, args};
+                    // return {message: `/liveroom "${JSON.stringify(data)}"`, args};
+                }
+            }
+            return {error: {message: 'This command should be formatted as: /liveroom "room topic" N'}};
+        });
 
         registry.registerPostTypeComponent('custom_livekit', LivePost);
         registry.registerReducer(reducer);

@@ -9,6 +9,7 @@ rm mage_1.13.0_Linux-64bit.tar.gz
 
 To use it, run `mage build` and `mage deploy`.
 To build static executable, run `mage -compile make`.
+To execute build and deploy in one go with static executable, use `./make install`.
 
 --- To set up Node.js
 

@@ -138,7 +138,7 @@ func (lkp *LiveKitPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandA
 			maxParticipants = uint32(integer)
 		}
 		lkp.API.LogInfo("creating rom", "topic", topic, "n", maxParticipants)
-		appErr := lkp.createPost(args.ChannelId, topic, maxParticipants)
+		appErr := lkp.createPost(args.ChannelId, args.UserId, topic, maxParticipants)
 		if appErr == nil {
 			response.Text = fmt.Sprintf("Creating room with topic = %s; maxParticipants = %d", topic, maxParticipants)
 		} else {
@@ -148,7 +148,7 @@ func (lkp *LiveKitPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandA
 	return response, nil
 }
 
-func (lkp *LiveKitPlugin) createPost(channelID, text string, maxParticipants uint32) *model.AppError {
+func (lkp *LiveKitPlugin) createPost(channelID, userID, text string, maxParticipants uint32) *model.AppError {
 	post := &model.Post{
 		UserId:    lkp.botUserID,
 		ChannelId: channelID,
@@ -156,7 +156,7 @@ func (lkp *LiveKitPlugin) createPost(channelID, text string, maxParticipants uin
 		Type:      "custom_livekit",
 		Props: map[string]interface{}{
 			"room_capacity": maxParticipants,
-			// "room_host":     member.UserId,
+			"room_host":     userID,
 			// "attachments": []*model.SlackAttachment{&model.SlackAttachment{}},
 		},
 	}
@@ -181,7 +181,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 	switch r.URL.Path {
 	case "/webhook":
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
-	case "/mvp_token":
+	case "/join":
 		var room *livekit.Room
 		mvpRequest := struct {
 			PostID string `json:"post_id"`
@@ -234,7 +234,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			accessToken := auth.NewAccessToken(lkp.configuration.ApiKey, lkp.configuration.ApiValue)
 			grant := &auth.VideoGrant{RoomJoin: true, Room: room.Name}
 			userName := tokenUser.GetDisplayName("full_name")
-			accessToken.AddGrant(grant).SetValidFor(time.Hour).SetIdentity(userID).SetName(userName)
+			accessToken.AddGrant(grant).SetValidFor(time.Hour * 12).SetIdentity(userID).SetName(userName)
 			tokenReply, err := accessToken.ToJWT()
 			if err == nil {
 				json.NewEncoder(w).Encode(tokenReply)
@@ -268,7 +268,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 				if appErr == nil {
 					info := fmt.Sprintf("User %s requested new live room for channel %s", member.UserId, member.ChannelId)
 					lkp.API.LogInfo(info)
-					appErr = lkp.createPost(roomRequest.ChannelID, roomRequest.Message, roomRequest.Capacity)
+					appErr = lkp.createPost(roomRequest.ChannelID, member.UserId, roomRequest.Message, roomRequest.Capacity)
 					if appErr == nil {
 						http.Error(w, "OK", http.StatusOK)
 					} else {
@@ -284,7 +284,7 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 		}
-	case "/join":
+	case "/old":
 		var tokenRequest map[string]string
 		err := json.NewDecoder(r.Body).Decode(&tokenRequest)
 		roomPost, ae := lkp.API.GetPost(tokenRequest["postID"])
@@ -318,19 +318,13 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		if err == nil && found {
 			info := fmt.Sprintf("User %s requested room deletion from post [%s]", userID, postID)
 			lkp.API.LogInfo(info)
-			post, appErr := lkp.API.GetPost(postID)
-			postHost := post.GetProp("room_host").(string)
-			if appErr == nil && postHost == userID {
-				// deletionRequest := livekit.DeleteRoomRequest{Room: post.Id}
-				// result, err := lkp.master.DeleteRoom(context.Background(), &deletionRequest)
-				// lkp.API.LogInfo(result.String())
-				appErr = lkp.API.DeletePost(post.Id)
-				if appErr == nil {
-					http.Error(w, "OK", http.StatusOK)
-					return
-				}
-				err = fmt.Errorf("%s", appErr.DetailedError)
+			appErr := lkp.API.DeletePost(postID)
+			// postHost := post.GetProp("room_host").(string)
+			if appErr == nil {
+				http.Error(w, "OK", http.StatusOK)
+				return
 			}
+			err = fmt.Errorf("%s", appErr.DetailedError)
 		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	case "/settings":

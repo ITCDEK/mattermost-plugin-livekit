@@ -13,7 +13,7 @@ export function fetchToken(postId:string): ActionFunc {
             console.log('fetchToken call with postId =', postId);
             const client = new Client4();
 
-            client.doFetch(`/plugins/${pluginId}/mvp_token`, {
+            client.doFetch(`/plugins/${pluginId}/join`, {
                 body: JSON.stringify({post_id: postId}),
                 method: 'POST',
                 credentials: 'include',
@@ -36,7 +36,7 @@ export function postMeeting(channelId:string): ActionFunc {
     return async (dispatch: DispatchFunc, getState: GetStateFunc): Promise<ActionResult> => {
         try {
             const client = new Client4();
-            client.doFetch(`/plugins/${pluginId}/room`, {
+            client.doFetch(`/plugins/${pluginId}/create`, {
                 body: JSON.stringify({channel_id: channelId, message: getTranslation("room.topic")}),
                 method: 'POST',
                 credentials: 'include',
@@ -101,6 +101,8 @@ export function getTranslation(id: string) {
     // @ts-ignore
     const state = window.plugins[pluginId].store.getState();
     const currentUser = getCurrentUser(state);
+    let userName = currentUser.nickname;
+    if (userName == "") userName = `${currentUser.first_name} ${currentUser.last_name}`;
     // console.log(currentUser);
     const supportedLocales = ["en", "ru"];
     let locale = getCurrentUserLocale(state);
@@ -112,8 +114,8 @@ export function getTranslation(id: string) {
             en: "Enter",
         },
         "room.topic": {
-            ru: `${currentUser.nickname} создал(а) комнату`,
-            en: `${currentUser.nickname} created live room`,
+            ru: `${userName} создал(а) комнату`,
+            en: `${userName} created live room`,
         },
     };
     // @ts-ignore

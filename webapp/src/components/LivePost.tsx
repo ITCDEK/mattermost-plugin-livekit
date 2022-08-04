@@ -12,12 +12,18 @@
     `Chakra`: ChakraUI for React
   */
 import * as React from 'react';
+import '@livekit/react-components/dist/index.css';
 import {
+    DisplayContext,
+    DisplayOptions,
     useParticipant,
+    ControlsProps,
     VideoRenderer,
     AudioRenderer,
     LiveKitRoom,
 } from '@livekit/react-components';
+
+import {Room, RoomEvent, setLogLevel, VideoPresets, createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
 
 import {connect, useSelector, useDispatch} from 'react-redux';
 import {defineMessages, useIntl } from 'react-intl';
@@ -28,8 +34,6 @@ import Row from 'react-bootstrap/Row';
 import Col from 'react-bootstrap/Col';
 import ToggleButton from 'react-bootstrap/ToggleButton';
 import ToggleButtonGroup from 'react-bootstrap/ToggleButtonGroup';
-import {createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
-
 import {fetchToken, getTranslation, deletePost} from '../actions';
 import {id as pluginId} from '../manifest';
 
@@ -41,11 +45,13 @@ const RoomView = (props: any) => {
     const dispatch = useDispatch();
     const ttl = Math.abs((new Date() - new Date(props.post.create_at)) / (1000 * 60 *60));
     if (ttl > 12) {
-        console.log(`liveKit post is ${ttl} hour(s) old, deleting...`);
+        console.log(`liveKit post is ${Math.round(ttl)} hour(s) old, deleting...`);
         dispatch(deletePost(props.post.id));
     }
     console.log(props.post.props.room_capacity);
     console.log(props.post.props.room_host);
+    const [displayOptions, setDisplayOptions] = React.useState<DisplayOptions>({stageLayout: 'grid', showStats: false});
+    const updateOptions = (options: DisplayOptions) => setDisplayOptions({...displayOptions, ...options});
     return (<>
         {!props.liveRooms[props.post.id] ?
             <StillRoom
@@ -62,16 +68,24 @@ const RoomView = (props: any) => {
             //     </Card.Body>
             // </Card> :
             (
-                <Card>
+                <DisplayContext.Provider value={displayOptions}>
+                <div className="roomContainer">
                     <LiveKitRoom
+                        // https://livekit-users.slack.com/archives/C01KVTJH6BX/p1653607763178469
+                        // https://github.com/livekit/livekit-react/blob/master/example/src/RoomPage.tsx
                         url={`wss://${props.pluginSettings.Host}:${props.pluginSettings.Port}`}
                         token={props.tokens[props.post.id]}
-                        stageRenderer={StageView}
+                        // stageRenderer={StageView}
+                        // controlRenderer={controlsRenderer}
                         onConnected={(room) => {
+                            setLogLevel('debug');
                             handleConnected(room);
+                            // onConnected(room, query);
                         }}
+                        onLeave={() => dispatch({type: "GO_STILL", data: props.post.id})}
                     />
-                </Card>
+                </div>
+                </DisplayContext.Provider>
             )}
     </>);
 };
@@ -103,7 +117,7 @@ const RoomStatusView = ({children}) => (
 // modify as you see fit. It uses the built-in ParticipantView component in this
 // example; you may use a custom component instead.
 function StageView({roomState}) {
-    const dispatch = useDispatch();
+    // const dispatch = useDispatch();
     const {room, participants, audioTracks, isConnecting, error} = roomState;
 
     // console.log({room, participants, audioTracks, isConnecting, error});
@@ -132,63 +146,8 @@ function StageView({roomState}) {
         lgCount = 4;
         mdCount = 6;
     }
-    const handleOff = () => {
-        room.disconnect();
-        dispatch({type: "GO_STILL", data: "pass post.id here"});
-    };
-    const onToggleMic = () => {
-        const enabled = room.localParticipant.isMicrophoneEnabled;
-        room.localParticipant.setMicrophoneEnabled(!enabled);
-    };
-    const onToggleVideo = () => {
-        const enabled = room.localParticipant.isCameraEnabled;
-        room.localParticipant.setCameraEnabled(!enabled);
-    };
-    const onToggleScreen = () => {
-        const enabled = room.localParticipant.isScreenShareEnabled;
-        room.localParticipant.setScreenShareEnabled(!enabled);
-    };
 
     return (<Container fluid={true}>
-        <Row className='justify-content-md-center mb-3'>
-            <Col lg={12}>
-                <Card>
-                    <Card.Body>
-                        <Button
-                            variant={room.localParticipant.isMicrophoneEnabled ? 'primary' : 'primary-outline'}
-                            className='mr-3'
-                            onClick={onToggleMic}
-                        >
-                            <i className={`CompassIcon ${room.localParticipant.isMicrophoneEnabled ? 'icon-microphone' : 'icon-microphone-off'}`}/>
-                            {room.localParticipant.isMicrophoneEnabled ? 'Звук включен' : 'Звук выключен'}
-                        </Button>
-                        <Button
-                            variant={room.localParticipant.isCameraEnabled ? 'primary' : 'primary-outline'}
-                            className='mr-3'
-                            onClick={onToggleVideo}
-                        >
-                            <i className='CompassIcon icon-camera-outline '/>
-                            {room.localParticipant.isCameraEnabled ? 'Видео включено' : 'Видео выключено'}
-                        </Button>
-                        <Button
-                            variant={'primary'}
-                            className='mr-3'
-                            onClick={onToggleScreen}
-                        >
-                            <i className='CompassIcon icon-monitor '/>
-                            {room.localParticipant.isScreenShareEnabled ? 'Прекратить показ' : 'Показать экран'}
-                        </Button>
-                        <Button
-                            variant='danger'
-                            onClick={handleOff}
-                        >
-                            <i className='CompassIcon icon-phone-hangup '/>
-                            Отключиться
-                        </Button>
-                    </Card.Body>
-                </Card>
-            </Col>
-        </Row>
         <Row>
             {data.map((participant) => (
                 <Col
@@ -215,6 +174,68 @@ function StageView({roomState}) {
                 />
             ))
         }
+    </Container>)
+    ;
+}
+
+function controlsRenderer(props: ControlsProps): React.ReactElement | null {
+    const handleOff = () => {
+        props.room.disconnect();
+        // dispatch({type: "GO_STILL", data: "pass post.id here"});
+    };
+    const onToggleMic = () => {
+        const enabled = props.room.localParticipant.isMicrophoneEnabled;
+        props.room.localParticipant.setMicrophoneEnabled(!enabled);
+    };
+    const onToggleVideo = () => {
+        const enabled = props.room.localParticipant.isCameraEnabled;
+        props.room.localParticipant.setCameraEnabled(!enabled);
+    };
+    const onToggleScreen = () => {
+        const enabled = props.room.localParticipant.isScreenShareEnabled;
+        props.room.localParticipant.setScreenShareEnabled(!enabled);
+    };
+
+    return (<Container fluid={true}>
+        <Row className='justify-content-md-center mb-3'>
+            <Col lg={12}>
+                <Card>
+                    <Card.Body>
+                        <Button
+                            variant={props.room.localParticipant.isMicrophoneEnabled ? 'primary' : 'primary-outline'}
+                            className='mr-3'
+                            onClick={onToggleMic}
+                        >
+                            <i className={`CompassIcon ${props.room.localParticipant.isMicrophoneEnabled ? 'icon-microphone' : 'icon-microphone-off'}`}/>
+                            {props.room.localParticipant.isMicrophoneEnabled ? 'Звук включен' : 'Звук выключен'}
+                        </Button>
+                        <Button
+                            variant={props.room.localParticipant.isCameraEnabled ? 'primary' : 'primary-outline'}
+                            className='mr-3'
+                            onClick={onToggleVideo}
+                        >
+                            <i className='CompassIcon icon-camera-outline '/>
+                            {props.room.localParticipant.isCameraEnabled ? 'Видео включено' : 'Видео выключено'}
+                        </Button>
+                        <Button
+                            variant={'primary'}
+                            className='mr-3'
+                            onClick={onToggleScreen}
+                        >
+                            <i className='CompassIcon icon-monitor '/>
+                            {props.room.localParticipant.isScreenShareEnabled ? 'Прекратить показ' : 'Показать экран'}
+                        </Button>
+                        <Button
+                            variant='danger'
+                            onClick={handleOff}
+                        >
+                            <i className='CompassIcon icon-phone-hangup '/>
+                            Отключиться
+                        </Button>
+                    </Card.Body>
+                </Card>
+            </Col>
+        </Row>
     </Container>)
     ;
 }

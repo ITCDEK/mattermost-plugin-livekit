@@ -11,15 +11,8 @@ const StillRoom = (props) => {
     const buttonLabel = getTranslation("room.connect");
     const style = getStyle(props.theme);
     const goLive = () => props.token ? dispatch({type: "GO_LIVE", data: props.post.id}) : dispatch(fetchToken(props.post.id));
-    const stopPropagation = (e) => {
-        e.persist();
-        e.preventDefault();
-        e.stopPropagation();
-        e.nativeEvent.stopImmediatePropagation();
-        console.log(e);
-    };
     return (
-        <div style={style.wrapper} onClick = {stopPropagation}>
+        <div style={style.wrapper} onClick = {props.stopPropagation}>
             <div style={style.message}>{props.post.message}</div>
             <div style={style.buttonWrapper}>
                 <div style={style.connectButton} className = "btn btn-lg btn-primary" onClick = {goLive}>{buttonLabel}</div>
@@ -64,7 +57,7 @@ const getStyle = makeStyleFromTheme((theme) => {
 function mapStateToProps(state, ownProps) {
     return {
         ...ownProps,
-        // theme: getTheme(),
+        // theme: getTheme(state),
         tokens: state[`plugins-${pluginId}`].tokens,
         pluginSettings: state[`plugins-${pluginId}`].config,
     };

@@ -8,12 +8,12 @@ function liveRooms(state: object = {}, action: {type: string, data: string}) {
     case "GO_LIVE":
         // @ts-ignore
         newLiveSet[action.data] = true;
-        console.log(newLiveSet);
+        console.log("liveRooms:", newLiveSet);
         return newLiveSet;
     case "GO_STILL":
         // @ts-ignore
         newLiveSet[action.data] = false;
-        console.log(newLiveSet);
+        console.log("liveRooms:", newLiveSet);
         return newLiveSet;
     default:
         return state;

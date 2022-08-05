@@ -48,16 +48,23 @@ const RoomView = (props: any) => {
         console.log(`liveKit post is ${Math.round(ttl)} hour(s) old, deleting...`);
         dispatch(deletePost(props.post.id));
     }
-    console.log(props.post.props.room_capacity);
-    console.log(props.post.props.room_host);
+    console.log(`rendering liveKit post with maxParticipants = ${props.post.props.room_capacity}, created by the ${props.post.props.room_host}`);
     const [displayOptions, setDisplayOptions] = React.useState<DisplayOptions>({stageLayout: 'grid', showStats: false});
     const updateOptions = (options: DisplayOptions) => setDisplayOptions({...displayOptions, ...options});
+    const stopPropagation = (e) => {
+        e.persist();
+        e.preventDefault();
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
+        console.log(e);
+    };
     return (<>
         {!props.liveRooms[props.post.id] ?
             <StillRoom
                 post = {props.post}
                 token = {props.tokens[props.post.id]}
-                theme = {props.theme}>
+                theme = {props.theme}
+                stopPropagation = {stopPropagation}>
             </StillRoom> :
             // <Card>
             //     <Card.Body>
@@ -69,12 +76,17 @@ const RoomView = (props: any) => {
             // </Card> :
             (
                 <DisplayContext.Provider value={displayOptions}>
-                <div className="roomContainer">
+                <div className="roomContainer" onClick = {stopPropagation}>
                     <LiveKitRoom
                         // https://livekit-users.slack.com/archives/C01KVTJH6BX/p1653607763178469
                         // https://github.com/livekit/livekit-react/blob/master/example/src/RoomPage.tsx
                         url={`wss://${props.pluginSettings.Host}:${props.pluginSettings.Port}`}
                         token={props.tokens[props.post.id]}
+                        roomOptions={{
+                            adaptiveStream: true,
+                            dynacast: true,
+                            videoCaptureDefaults: {resolution: VideoPresets.h720.resolution},
+                        }}
                         // stageRenderer={StageView}
                         // controlRenderer={controlsRenderer}
                         onConnected={(room) => {

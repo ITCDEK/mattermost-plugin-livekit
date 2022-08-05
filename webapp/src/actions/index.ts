@@ -66,6 +66,7 @@ export function deletePost(postId:string): ActionFunc {
                 credentials: 'include',
             }).then((response) => {
                 // @ts-ignore
+                console.log('Post deleting response:', response);
             });
             return {data: "Ok"};
         } catch (error) {

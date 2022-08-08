@@ -42,7 +42,7 @@ export function postMeeting(channelId:string): ActionFunc {
                 credentials: 'include',
             }).then((response) => {
                 // @ts-ignore
-                console.log('Hosting room:');
+                console.log('Hosting room response:');
                 console.log(response);
                 dispatch({
                     type: "ROOM_HOSTED",

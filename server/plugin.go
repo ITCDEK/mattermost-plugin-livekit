@@ -169,8 +169,14 @@ func (lkp *LiveKitPlugin) createPost(channelID, userID, text string, maxParticip
 	return appErr
 }
 
+func (lkp *LiveKitPlugin) writeErrorResponse(w http.ResponseWriter, text string) {}
+
 // ServeHTTP demonstrates a plugin that handles HTTP requests by greeting the world.
 func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
+	clientResponse := struct {
+		Status string
+		Error  string
+	}{Status: "error"}
 	userID := r.Header.Get("Mattermost-User-ID")
 	if userID == "" {
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
@@ -270,10 +276,11 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 					lkp.API.LogInfo(info)
 					appErr = lkp.createPost(roomRequest.ChannelID, member.UserId, roomRequest.Message, roomRequest.Capacity)
 					if appErr == nil {
-						http.Error(w, "OK", http.StatusOK)
+						clientResponse.Status = "OK"
+						json.NewEncoder(w).Encode(clientResponse)
 					} else {
-						lkp.API.LogInfo("post creation failed", "reason", appErr.DetailedError)
-						http.Error(w, appErr.DetailedError, http.StatusInternalServerError)
+						clientResponse.Error = appErr.DetailedError
+						json.NewEncoder(w).Encode(clientResponse)
 					}
 					return
 				}
@@ -321,12 +328,14 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			appErr := lkp.API.DeletePost(postID)
 			// postHost := post.GetProp("room_host").(string)
 			if appErr == nil {
-				http.Error(w, "OK", http.StatusOK)
+				clientResponse.Status = "OK"
+				json.NewEncoder(w).Encode(clientResponse)
 				return
 			}
 			err = fmt.Errorf("%s", appErr.DetailedError)
 		}
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		clientResponse.Error = err.Error()
+		json.NewEncoder(w).Encode(clientResponse)
 	case "/settings":
 		copy := *lkp.configuration
 		copy.ApiKey = "n/a"

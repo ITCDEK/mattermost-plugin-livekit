@@ -65,7 +65,6 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 	case "/webhook":
 		http.Error(w, "Not authorized", http.StatusUnauthorized)
 	case "/join":
-		tokenReply := fetchResponse{Status: "error"}
 		var room *livekit.Room
 		tokenRequest := struct {
 			PostID string `json:"post_id"`
@@ -76,8 +75,8 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			_, cmAE := lkp.API.GetChannelMember(post.ChannelId, userID)
 			tokenUser, userAE := lkp.API.GetUser(userID)
 			if postAE != nil || cmAE != nil || userAE != nil {
-				tokenReply.Error = fmt.Sprintf("%s\n%s\n%s", postAE.DetailedError, cmAE.DetailedError, userAE.DetailedError)
-				json.NewEncoder(w).Encode(tokenReply)
+				reply.Error = fmt.Sprintf("%s\n%s\n%s", postAE.DetailedError, cmAE.DetailedError, userAE.DetailedError)
+				json.NewEncoder(w).Encode(reply)
 				return
 			}
 			lkp.API.LogInfo("room token requested", "post_id", tokenRequest.PostID)
@@ -113,14 +112,14 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 			accessToken.AddGrant(grant).SetValidFor(time.Hour * 12).SetIdentity(userID).SetName(userName)
 			jwt, err := accessToken.ToJWT()
 			if err == nil {
-				tokenReply.Status = "OK"
-				tokenReply.Data = jwt
-				json.NewEncoder(w).Encode(tokenReply)
+				reply.Status = "OK"
+				reply.Data = jwt
+				json.NewEncoder(w).Encode(reply)
 				return
 			}
 		}
-		tokenReply.Error = err.Error()
-		json.NewEncoder(w).Encode(tokenReply)
+		reply.Error = err.Error()
+		json.NewEncoder(w).Encode(reply)
 	case "/rooms":
 		roomList, err := lkp.master.ListRooms(context.Background(), &livekit.ListRoomsRequest{})
 		if err == nil {

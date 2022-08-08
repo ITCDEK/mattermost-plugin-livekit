@@ -45,8 +45,8 @@ const RoomView = (props: any) => {
     const dispatch = useDispatch();
     const ttl = Math.abs((new Date() - new Date(props.post.create_at)) / (1000 * 60 *60));
     if (ttl > 12) {
-        console.log(`liveKit post is ${Math.round(ttl)} hour(s) old, deleting...`);
         dispatch(deletePost(props.post.id));
+        return `liveKit post is ${Math.round(ttl)} hour(s) old, deleting...`;
     }
     console.log(`rendering liveKit post with maxParticipants = ${props.post.props.room_capacity}, created by the ${props.post.props.room_host}`);
     const [displayOptions, setDisplayOptions] = React.useState<DisplayOptions>({stageLayout: 'grid', showStats: false});
@@ -79,7 +79,6 @@ const RoomView = (props: any) => {
                 <div className="roomContainer" onClick = {stopPropagation}>
                     <LiveKitRoom
                         // https://livekit-users.slack.com/archives/C01KVTJH6BX/p1653607763178469
-                        // https://github.com/livekit/livekit-react/blob/master/example/src/RoomPage.tsx
                         url={`wss://${props.pluginSettings.Host}:${props.pluginSettings.Port}`}
                         token={props.tokens[props.post.id]}
                         roomOptions={{

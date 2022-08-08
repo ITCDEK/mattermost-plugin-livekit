@@ -18,8 +18,15 @@ export function fetchToken(postId:string): ActionFunc {
                 method: 'POST',
                 credentials: 'include',
             }).then((response) => {
-                dispatch({type: "TOKEN_RECEIVED", data: {id: postId, jwt: response}});
-                dispatch({type: "GO_LIVE", data: postId});
+                // @ts-ignore
+                if (response.status == "OK") {
+                    // @ts-ignore
+                    dispatch({type: "TOKEN_RECEIVED", data: {id: postId, jwt: response.data}});
+                    dispatch({type: "GO_LIVE", data: postId});
+                } else {
+                    // @ts-ignore
+                    console.log(`Token error: ${response.error}`);
+                }
             });
             return {data: "Ok"};
         } catch (error) {
@@ -42,12 +49,12 @@ export function postMeeting(channelId:string): ActionFunc {
                 credentials: 'include',
             }).then((response) => {
                 // @ts-ignore
-                console.log('Hosting room response:');
-                console.log(response);
-                dispatch({
-                    type: "ROOM_HOSTED",
-                    data: response
-                });
+                if (response.status == "OK") {
+                    dispatch({type: "ROOM_HOSTED", data: response});
+                } else {
+                    // @ts-ignore
+                    console.log(`Hosting room error: ${response.error}`);
+                }
             });
             return {data: "Ok"};
         } catch (error) {

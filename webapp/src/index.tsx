@@ -6,7 +6,7 @@ import {GlobalState} from 'mattermost-redux/types/store';
 
 import manifest from './manifest';
 import reducer from './reducers';
-import {fetchToken, postMeeting, getSettings} from './actions';
+import {postMeeting, getSettings, getTranslation} from './actions';
 import ChannelHeaderIcon from './components/channel-header-icon';
 
 // eslint-disable-next-line import/no-unresolved
@@ -33,8 +33,8 @@ export default class LiveKitPlugin {
             (channel) => {
                 postMeeting(channel.id)(store.dispatch, store.getState);
             },
-            'Start LiveKit Meeting',
-            'Start LiveKit Meeting',
+            getTranslation("icon.dropdown"),
+            getTranslation("icon.tooltip"),
         );
         
         registry.registerSlashCommandWillBePostedHook(async (message, args) => {

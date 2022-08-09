@@ -18,6 +18,7 @@ import {
     DisplayOptions,
     useParticipant,
     ControlsProps,
+    StageProps,
     VideoRenderer,
     AudioRenderer,
     LiveKitRoom,
@@ -26,6 +27,7 @@ import {
 import {Room, RoomEvent, setLogLevel, VideoPresets, createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
 
 import {connect, useSelector, useDispatch} from 'react-redux';
+import { useMediaQuery } from 'react-responsive';
 import {defineMessages, useIntl } from 'react-intl';
 import Card from 'react-bootstrap/Card';
 import Button from 'react-bootstrap/Button';
@@ -127,22 +129,27 @@ const RoomStatusView = ({children}) => (
 // renderStage prepares the layout of the stage using subcomponents. Feel free to
 // modify as you see fit. It uses the built-in ParticipantView component in this
 // example; you may use a custom component instead.
-function StageView({roomState}) {
-    // const dispatch = useDispatch();
-    const {room, participants, audioTracks, isConnecting, error} = roomState;
+function StageView(props: StageProps) { //{roomState}
+    const context = React.useContext(DisplayContext);
+    const { room, participants, audioTracks, isConnecting, error } = props.roomState;
+    // const {room, participants, audioTracks, isConnecting, error} = roomState;
 
     // console.log({room, participants, audioTracks, isConnecting, error});
 
     if (isConnecting) {
-        return <RoomStatusView>Подключение...</RoomStatusView>;
+        return getTranslation("status.connecting");
+        // return <RoomStatusView>Подключение...</RoomStatusView>;
     }
     if (error) {
         return <RoomStatusView>Ошибка: {error.message}</RoomStatusView>;
     }
     if (!room) {
         return <RoomStatusView>Комната закрыта</RoomStatusView>;
+        // return getTranslation("status.noRoom");
     }
 
+    const isMobile = useMediaQuery({ query: '(max-width: 800px)' });
+    // if (context.stageLayout === 'grid' && screenTrack === undefined) {}
     // const data = [...participants, ...participants, ...participants, ...participants, ...participants];
     const data = participants;
     let xxlCount = 6;

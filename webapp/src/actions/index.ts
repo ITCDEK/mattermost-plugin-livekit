@@ -117,6 +117,14 @@ export function getTranslation(id: string) {
     // console.log(`locale = ${locale}`);
     locale = supportedLocales.includes(locale) ? locale : "en";
     const templates = {
+        "icon.dropdown": {
+            ru: "Создать видео пост",
+            en: 'Start LiveKit Meeting',
+        },
+        "icon.tooltip": {
+            ru: "Создать встречу вживую",
+            en: 'Start LiveKit Meeting',
+        },
         "room.connect": {
             ru: "Войти",
             en: "Enter",
@@ -125,6 +133,14 @@ export function getTranslation(id: string) {
             ru: `${userName} создал(а) комнату`,
             en: `${userName} created live room`,
         },
+        "status.connecting": {
+            ru: "Подключаемся...",
+            en: "Connecting...",
+        },
+        "status.noRoom": {
+            ru: "Комната закрыта",
+            en: "Room is closed",
+        }
     };
     // @ts-ignore
     return templates[id][locale];

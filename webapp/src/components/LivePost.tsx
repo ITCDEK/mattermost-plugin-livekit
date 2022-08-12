@@ -140,8 +140,7 @@ function StageView({roomState}) {
     // console.log({room, participants, audioTracks, isConnecting, error});
 
     if (isConnecting) {
-        return getTranslation("status.connecting");
-        // return <RoomStatusView>Подключение...</RoomStatusView>;
+        return <RoomStatusView>Подключение...</RoomStatusView>;
     }
     if (error) {
         return <RoomStatusView>Ошибка: {error.message}</RoomStatusView>;
@@ -216,7 +215,7 @@ function roomRenderer(props: StageProps): React.ReactElement | null  {
         } else if (participants.length < 3) {
             setGridClass("grid2x1");
             numVisible = 2;
-        } else if (participants.length < 5) {
+        } else {
             setGridClass("grid2x2");
             numVisible = Math.min(participants.length, 4);
         }
@@ -249,12 +248,21 @@ function roomRenderer(props: StageProps): React.ReactElement | null  {
         setVisibleParticipants(newParticipants);
     }, [participants])
     
+    if (error) return <div>{error.message}</div>;
+    if (!room) return <div>{getTranslation("status.noRoom")}</div>;
+    if (isConnecting) return <div>{getTranslation("status.connecting")}</div>;
+    if (participants.length === 0) return <div>{getTranslation("status.roomEmpty")}</div>;
+    
     // const isMobile = useMediaQuery({ query: '(max-width: 800px)' });
     // if (context.stageLayout === 'grid' && screenTrack === undefined) {}
     // if (participants.length == 2) {}
     // if (participants.length < 5) {}
+
+    var maxPostHeight = Math.round(document.getElementById("post-list")?.clientHeight - 20);
+    var containerStyle = {maxHeight: `${maxPostHeight}px`};
+
     return(
-        <div className="roomContainer" onClick = {stopPropagation}>
+        <div style = {containerStyle} className="roomContainer" onClick = {stopPropagation}>
             <div className={`participantsArea ${gridClass}`}>
                 {visibleParticipants.map((participant) => { return (
                     <ParticipantView

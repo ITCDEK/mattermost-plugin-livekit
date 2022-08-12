@@ -140,6 +140,10 @@ export function getTranslation(id: string) {
         "status.noRoom": {
             ru: "Комната закрыта",
             en: "Room is closed",
+        },
+        "status.roomEmpty": {
+            ru: "Эта комната пуста.",
+            en: "No one is in the room...",
         }
     };
     // @ts-ignore

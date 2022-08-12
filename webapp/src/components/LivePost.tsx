@@ -12,19 +12,20 @@
     `Chakra`: ChakraUI for React
   */
 import * as React from 'react';
-import '@livekit/react-components/dist/index.css';
 import {
     DisplayContext,
     DisplayOptions,
     useParticipant,
     ControlsProps,
     StageProps,
+    ParticipantView,
     VideoRenderer,
     AudioRenderer,
     LiveKitRoom,
+    ControlsView,
 } from '@livekit/react-components';
 
-import {Room, RoomEvent, setLogLevel, VideoPresets, createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
+import {Room, RoomEvent, Participant, setLogLevel, VideoPresets, createLocalVideoTrack, LocalVideoTrack, createLocalTracks} from 'livekit-client';
 
 import {connect, useSelector, useDispatch} from 'react-redux';
 import { useMediaQuery } from 'react-responsive';
@@ -41,7 +42,17 @@ import {id as pluginId} from '../manifest';
 
 import StillRoom from './StillRoom';
 
+import '@livekit/react-components/dist/index.css';
+import './livepost.css';
 import './style.scss';
+
+const stopPropagation = (e) => {
+    e.persist();
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+    console.log(e);
+};
 
 const RoomView = (props: any) => {
     const dispatch = useDispatch();
@@ -53,13 +64,6 @@ const RoomView = (props: any) => {
     console.log(`rendering liveKit post with maxParticipants = ${props.post.props.room_capacity}, created by the ${props.post.props.room_host}`);
     const [displayOptions, setDisplayOptions] = React.useState<DisplayOptions>({stageLayout: 'grid', showStats: false});
     const updateOptions = (options: DisplayOptions) => setDisplayOptions({...displayOptions, ...options});
-    const stopPropagation = (e) => {
-        e.persist();
-        e.preventDefault();
-        e.stopPropagation();
-        e.nativeEvent.stopImmediatePropagation();
-        console.log(e);
-    };
     return (<>
         {!props.liveRooms[props.post.id] ?
             <StillRoom
@@ -77,8 +81,8 @@ const RoomView = (props: any) => {
             //     </Card.Body>
             // </Card> :
             (
-                <DisplayContext.Provider value={displayOptions}>
-                <div className="roomContainer" onClick = {stopPropagation}>
+                // <DisplayContext.Provider value={displayOptions}>
+                // <div className="roomContainer" onClick = {stopPropagation}>
                     <LiveKitRoom
                         // https://livekit-users.slack.com/archives/C01KVTJH6BX/p1653607763178469
                         url={`wss://${props.pluginSettings.Host}:${props.pluginSettings.Port}`}
@@ -89,16 +93,17 @@ const RoomView = (props: any) => {
                             videoCaptureDefaults: {resolution: VideoPresets.h720.resolution},
                         }}
                         // stageRenderer={StageView}
+                        stageRenderer={roomRenderer}
                         // controlRenderer={controlsRenderer}
                         onConnected={(room) => {
                             setLogLevel('debug');
-                            handleConnected(room);
+                            initialize(room);
                             // onConnected(room, query);
                         }}
                         onLeave={() => dispatch({type: "GO_STILL", data: props.post.id})}
                     />
-                </div>
-                </DisplayContext.Provider>
+                // </div>
+                // </DisplayContext.Provider>
             )}
     </>);
 };
@@ -129,10 +134,8 @@ const RoomStatusView = ({children}) => (
 // renderStage prepares the layout of the stage using subcomponents. Feel free to
 // modify as you see fit. It uses the built-in ParticipantView component in this
 // example; you may use a custom component instead.
-function StageView(props: StageProps) { //{roomState}
-    const context = React.useContext(DisplayContext);
-    const { room, participants, audioTracks, isConnecting, error } = props.roomState;
-    // const {room, participants, audioTracks, isConnecting, error} = roomState;
+function StageView({roomState}) {
+    const {room, participants, audioTracks, isConnecting, error} = roomState;
 
     // console.log({room, participants, audioTracks, isConnecting, error});
 
@@ -148,8 +151,6 @@ function StageView(props: StageProps) { //{roomState}
         // return getTranslation("status.noRoom");
     }
 
-    const isMobile = useMediaQuery({ query: '(max-width: 800px)' });
-    // if (context.stageLayout === 'grid' && screenTrack === undefined) {}
     // const data = [...participants, ...participants, ...participants, ...participants, ...participants];
     const data = participants;
     let xxlCount = 6;
@@ -194,6 +195,86 @@ function StageView(props: StageProps) { //{roomState}
         }
     </Container>)
     ;
+}
+
+function roomRenderer(props: StageProps): React.ReactElement | null  {
+    // https://github.com/livekit/livekit-react/blob/master/packages/components/src/components/desktop/GridStage.tsx
+    const dispatch = useDispatch();
+    const { room, participants, audioTracks, isConnecting, error } = props.roomState;
+    // const context = React.useContext(DisplayContext);
+    const [visibleParticipants, setVisibleParticipants] = React.useState<Participant[]>([]);
+    const [speakerWeights, setWeights] = React.useState<{[key: string]: number}>({});
+    const [showOverlay, setShowOverlay] = React.useState(false);
+    const [gridClass, setGridClass] = React.useState("grid2x1");
+    
+    // compute visible participants and sort.
+    React.useEffect(() => {
+        // determine grid size
+        let numVisible = 1;
+        if (participants.length === 0) {
+            setGridClass("grid1x1");
+        } else if (participants.length < 3) {
+            setGridClass("grid2x1");
+            numVisible = 2;
+        } else if (participants.length < 5) {
+            setGridClass("grid2x2");
+            numVisible = Math.min(participants.length, 4);
+        }
+        // remove any participants that are no longer connected
+        const newParticipants: Participant[] = [];
+        visibleParticipants.forEach((p) => {
+            if (room?.participants.has(p.sid) || room?.localParticipant.sid === p.sid) newParticipants.push(p);
+        });
+    
+        // ensure active speakers are all visible
+        room?.activeSpeakers?.forEach((speaker) => {
+            if (newParticipants.includes(speaker) || (speaker !== room?.localParticipant && !room?.participants.has(speaker.sid))) return;
+            // find a non-active speaker and switch
+            const idx = newParticipants.findIndex((p) => !p.isSpeaking);
+            if (idx >= 0) {
+                newParticipants[idx] = speaker;
+            } else {
+                newParticipants.push(speaker);
+            }
+        });
+    
+        // add other non speakers
+        for (const p of participants) {
+            if (newParticipants.length >= numVisible) break;
+            if (newParticipants.includes(p) || p.isSpeaking) continue;
+            newParticipants.push(p);
+        }
+        if (newParticipants.length > numVisible) newParticipants.splice(numVisible, newParticipants.length - numVisible);
+        
+        setVisibleParticipants(newParticipants);
+    }, [participants])
+    
+    // const isMobile = useMediaQuery({ query: '(max-width: 800px)' });
+    // if (context.stageLayout === 'grid' && screenTrack === undefined) {}
+    // if (participants.length == 2) {}
+    // if (participants.length < 5) {}
+    return(
+        <div className="roomContainer" onClick = {stopPropagation}>
+            <div className={`participantsArea ${gridClass}`}>
+                {visibleParticipants.map((participant) => { return (
+                    <ParticipantView
+                        key={participant.identity}
+                        participant={participant}
+                        orientation="landscape"
+                        width="100%"
+                        height="100%"
+                        showOverlay={showOverlay}
+                        showConnectionQuality
+                        onMouseEnter={() => setShowOverlay(true)}
+                        onMouseLeave={() => setShowOverlay(false)}
+                    />
+                );})}
+            </div>
+            <div className="controlsArea">
+                <ControlsView room={room} onLeave={props.onLeave} />
+            </div>
+        </div>
+    );
 }
 
 function controlsRenderer(props: ControlsProps): React.ReactElement | null {
@@ -258,7 +339,7 @@ function controlsRenderer(props: ControlsProps): React.ReactElement | null {
     ;
 }
 
-async function handleConnected(room) {
+async function initialize(room: Room) {
     console.log('connected to room', room);
 
     const tracks = await createLocalTracks({

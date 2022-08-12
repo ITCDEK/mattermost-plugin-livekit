@@ -23,7 +23,7 @@ const StillRoom = (props) => {
 
 const getStyle = makeStyleFromTheme((theme) => {
     console.log(theme);
-    return {
+    var styles = {
         wrapper: {
             width: "100%",
             display: "flex",
@@ -46,12 +46,10 @@ const getStyle = makeStyleFromTheme((theme) => {
             // backgroundColor: theme.buttonBg,
             backgroundColor: "coral",
         },
-        button: {
-            // color: theme.buttonColor,
-            position: 'relative',
-            top: '-1px',
-        },
     };
+    //Denim, Sapphire, Quartz, Indigo, Onyx
+    if (theme.type == "Indigo" || theme.type == "Onyx") {}
+    return styles;
 });
 
 function mapStateToProps(state, ownProps) {

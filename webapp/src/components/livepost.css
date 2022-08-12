@@ -1,0 +1,39 @@
+
+.roomContainer {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto min-content;
+    min-height: 0;
+}
+
+.participantsArea {
+    display: grid;
+    gap: 8px;
+    overflow: hidden;
+    height: 100%;
+    align-items: center;
+    justify-items: center;
+}
+
+.controlsArea {
+    height: 100px;
+    display: grid;
+    align-items: center;
+    justify-items: center;
+}
+
+.grid1x1 {
+    grid-template-columns: auto;
+    grid-template-rows: auto;
+}
+
+.grid2x1 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: auto;
+}
+
+.grid2x2 {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+}

@@ -130,7 +130,7 @@ export function getTranslation(id: string) {
             en: "Enter",
         },
         "room.topic": {
-            ru: `${userName} создал(а) комнату`,
+            ru: `${userName} приглашает в свою комнату`,
             en: `${userName} created live room`,
         },
         "status.connecting": {

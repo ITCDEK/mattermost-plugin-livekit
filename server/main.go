@@ -19,6 +19,7 @@ import (
 type LiveKitPlugin struct {
 	plugin.MattermostPlugin
 	botUserID         string
+	bundlePath        string
 	configurationLock sync.RWMutex
 	configuration     *configuration
 	master            *kitSDK.RoomServiceClient
@@ -54,6 +55,7 @@ func (lkp *LiveKitPlugin) OnActivate() error {
 	lkp.API.LogInfo("Setting bot profile image")
 	bundlePath, err := lkp.API.GetBundlePath()
 	if err == nil {
+		lkp.bundlePath = bundlePath
 		profileImage, err := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "bot-icon.png")) //SVG format is not supported
 		if err == nil {
 			if appErr := lkp.API.SetProfileImage(botUserID, profileImage); appErr != nil {

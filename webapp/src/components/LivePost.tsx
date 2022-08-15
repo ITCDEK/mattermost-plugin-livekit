@@ -258,8 +258,8 @@ function roomRenderer(props: StageProps): React.ReactElement | null  {
     // if (participants.length == 2) {}
     // if (participants.length < 5) {}
 
-    var maxPostHeight = Math.round(document.getElementById("post-list")?.clientHeight - 20);
-    var containerStyle = {maxHeight: `${maxPostHeight}px`};
+    var maxPostHeight = Math.round(document.getElementById("post-list")?.clientHeight) - 50;
+    var containerStyle = {height: `${maxPostHeight}px`};
 
     return(
         <div style = {containerStyle} className="roomContainer" onClick = {stopPropagation}>
@@ -277,6 +277,9 @@ function roomRenderer(props: StageProps): React.ReactElement | null  {
                         onMouseLeave={() => setShowOverlay(false)}
                     />
                 );})}
+                {props.roomState.audioTracks.map((track) => (
+                    <AudioRenderer key={track.sid} track={track} isLocal={false} />
+                ))}
             </div>
             <div className="controlsArea">
                 <ControlsView room={room} onLeave={props.onLeave} />
@@ -357,6 +360,7 @@ async function initialize(room: Room) {
     tracks.forEach((track) => {
         room.localParticipant.publishTrack(track, {simulcast: true});
     });
+    room.startAudio();
 }
 
 function mapStateToProps(state, ownProps) {

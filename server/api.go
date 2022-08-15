@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"time"
 
 	"github.com/livekit/protocol/auth"
@@ -185,6 +186,8 @@ func (lkp *LiveKitPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r 
 		copy.ApiKey = "n/a"
 		copy.ApiValue = "n/a"
 		json.NewEncoder(w).Encode(copy)
+	case "/assets/channel-icon.png":
+		http.ServeFile(w, r, filepath.Join(lkp.bundlePath, "assets", "channel-icon.png"))
 	default:
 		http.NotFound(w, r)
 	}

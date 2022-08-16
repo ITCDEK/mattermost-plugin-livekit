@@ -14,9 +14,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
+	gitlab "github.com/xanzy/go-gitlab"
 
 	"github.com/mattermost/mattermost-server/v6/model"
 )
@@ -26,8 +28,18 @@ import (
 
 var Default = Compile
 var pluginSettings model.Manifest
+var gitlabURL string
+var gitlabToken string
+var gitlabProjectID int
+var bundleName string
+
+type Hub mg.Namespace
+type Lab mg.Namespace
 
 func init() {
+	gitlabURL = fmt.Sprintf("https://%s/api/v4", "gitlab.cdek.ru")
+	gitlabToken = "glpat-AxBBC5XZJDdPZn9Ekv_T"
+	gitlabProjectID = 1809
 	jsonFile, err := os.Open("plugin.json")
 	defer jsonFile.Close()
 	if err == nil {
@@ -38,9 +50,106 @@ func init() {
 	}
 	if err == nil {
 		fmt.Println("Settings for plugin <", pluginSettings.Id, "> loaded")
+		bundleName = fmt.Sprintf("%s-%s.tar.gz", pluginSettings.Id, pluginSettings.Version)
 	} else {
 		fmt.Println("plugin.json fail:", err.Error())
 	}
+}
+
+func (Lab) Release() error {
+	git, err := gitlab.NewClient(gitlabToken, gitlab.WithBaseURL(gitlabURL))
+	if err == nil {
+		// https://gitlab.com/gitlab-org/release-cli/-/tree/master/docs/examples/release-assets-as-generic-package
+		// https://gitlab.cdek.ru/help/user/packages/generic_packages/index.md#publish-a-package-file
+		// https://pkg.go.dev/github.com/xanzy/go-gitlab#Client.UploadRequest
+		packages, listPackagesResponse, err := git.Packages.ListProjectPackages(gitlabProjectID, &gitlab.ListProjectPackagesOptions{})
+		if err == nil && listPackagesResponse.StatusCode == 200 {
+			for i := range packages {
+				fmt.Println("Checking package", packages[i].Name, "...")
+				packageFiles, listFilesResponse, err := git.Packages.ListPackageFiles(gitlabProjectID, packages[i].ID, &gitlab.ListPackageFilesOptions{})
+				if err == nil && listFilesResponse.StatusCode == 200 {
+					for i := range packageFiles {
+						fmt.Println(packageFiles[i].PackageID, packageFiles[i].ID, packageFiles[i].FileName)
+						if packageFiles[i].FileName == bundleName {
+							return fmt.Errorf("bundle named %s has already been published!", bundleName)
+						}
+					}
+				}
+			}
+		} else {
+			fmt.Println(listPackagesResponse.Status, err.Error())
+		}
+		//
+		fmt.Println("Uploading bundle", bundleName)
+		bundleFile, err := os.Open("./dist/" + bundleName)
+		defer bundleFile.Close()
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		publishedFile, publishResponse, err := git.GenericPackages.PublishPackageFile(
+			gitlabProjectID,
+			"Releases",
+			pluginSettings.Version,
+			bundleName,
+			bundleFile,
+			&gitlab.PublishPackageFileOptions{
+				Select: gitlab.GenericPackageSelect(gitlab.SelectPackageFile),
+				Status: gitlab.GenericPackageStatus(gitlab.PackageDefault),
+			},
+		)
+		if err == nil && publishResponse.StatusCode == 200 {
+			url1 := fmt.Sprintf("https://gitlab.cdek.ru/FrontDev/mm-pliugin-video/-/package_files/%d/download", publishedFile.ID)
+			fmt.Println(url1)
+			url2 := fmt.Sprintf("https://gitlab.cdek.ru%s", publishedFile.File.URL)
+			fmt.Println(url2)
+			linkType := gitlab.PackageLinkType
+			bundleLink := &gitlab.ReleaseAssetLinkOptions{
+				Name:     gitlab.String("get bundle"),
+				URL:      gitlab.String(url1),
+				LinkType: (*gitlab.LinkTypeValue)(&linkType),
+			}
+			release, releaseResponse, err := git.Releases.CreateRelease(
+				gitlabProjectID,
+				&gitlab.CreateReleaseOptions{
+					Ref:         gitlab.String("master"), // It can be a commit SHA, another tag name, or a branch name.
+					Name:        gitlab.String("q"),
+					TagName:     gitlab.String("beta"),
+					TagMessage:  gitlab.String(""),
+					Description: gitlab.String("no description provided (for quick releases)"),
+					ReleasedAt:  gitlab.Time(time.Now()),
+					Assets: &gitlab.ReleaseAssetsOptions{
+						Links: []*gitlab.ReleaseAssetLinkOptions{bundleLink},
+					},
+				},
+			)
+			if err == nil && releaseResponse.StatusCode == 201 {
+				fmt.Println(releaseResponse.Status, release.Name, "released")
+			} else {
+				fmt.Println(releaseResponse.Status)
+				fmt.Println(err.Error())
+			}
+		} else {
+			fmt.Println(publishResponse.Status)
+			fmt.Println(err.Error())
+		}
+	}
+	return err
+}
+
+func (Lab) ListProjects() error {
+	git, err := gitlab.NewClient(gitlabToken, gitlab.WithBaseURL(gitlabURL))
+	if err == nil {
+		name := "video"
+		fmt.Println("Searching GitLab for", name, "...")
+		projectsOptions := &gitlab.ListProjectsOptions{Search: gitlab.String(name)}
+		projects, _, err := git.Projects.ListProjects(projectsOptions)
+		if err == nil {
+			for i := range projects {
+				fmt.Println(projects[i].ID, projects[i].WebURL)
+			}
+		}
+	}
+	return err
 }
 
 func Install() error {
@@ -68,7 +177,7 @@ func Deploy() error {
 		fmt.Printf("fail!\n")
 		return err
 	}
-	bundlePath := fmt.Sprintf("./dist/%s-%s.tar.gz", pluginSettings.Id, pluginSettings.Version)
+	bundlePath := fmt.Sprintf("./dist/%s", bundleName)
 	pluginBundle, err := os.Open(bundlePath)
 	if err != nil {
 		return fmt.Errorf("failed to open %s: %w", bundlePath, err)
@@ -103,7 +212,6 @@ func Build() error {
 	err := copyFile("plugin.json", destinationDir)
 	err = copyFile("webapp/dist/main.js", destinationDir+"/webapp")
 	err = copyDir("assets", destinationDir)
-	bundleName := fmt.Sprintf("%s-%s.tar.gz", pluginSettings.Id, pluginSettings.Version)
 	err = run("./dist", "tar", "-cvzf", bundleName, pluginSettings.Id)
 	return err
 }

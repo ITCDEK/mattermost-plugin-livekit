@@ -104,7 +104,7 @@ func (Lab) Release() error {
 			fmt.Println(url2)
 			bundleLink := &gitlab.ReleaseAssetLinkOptions{
 				Name:     gitlab.String("get bundle"),
-				URL:      gitlab.String(url2),
+				URL:      gitlab.String(url1),
 				LinkType: gitlab.LinkType(gitlab.PackageLinkType),
 			}
 			year, month, day := time.Now().Date()
@@ -124,7 +124,7 @@ func (Lab) Release() error {
 				},
 			)
 			if err == nil && releaseResponse.StatusCode == 201 {
-				fmt.Println(releaseResponse.Status, release.Name, "released")
+				fmt.Println(releaseResponse.Status, "'", release.Name, "'")
 			} else {
 				fmt.Println(releaseResponse.Status)
 				fmt.Println(err.Error())

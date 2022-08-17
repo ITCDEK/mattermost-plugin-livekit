@@ -37,7 +37,7 @@ type Hub mg.Namespace
 type Lab mg.Namespace
 
 func init() {
-	gitlabURL = fmt.Sprintf("https://%s/api/v4", "gitlab.cdek.ru")
+	gitlabURL = "https://gitlab.cdek.ru"
 	gitlabToken = "glpat-AxBBC5XZJDdPZn9Ekv_T"
 	gitlabProjectID = 1809
 	jsonFile, err := os.Open("plugin.json")
@@ -57,7 +57,7 @@ func init() {
 }
 
 func (Lab) Release() error {
-	git, err := gitlab.NewClient(gitlabToken, gitlab.WithBaseURL(gitlabURL))
+	git, err := gitlab.NewClient(gitlabToken, gitlab.WithBaseURL(gitlabURL+"/api/v4"))
 	if err == nil {
 		// https://gitlab.com/gitlab-org/release-cli/-/tree/master/docs/examples/release-assets-as-generic-package
 		// https://gitlab.cdek.ru/help/user/packages/generic_packages/index.md#publish-a-package-file
@@ -100,20 +100,21 @@ func (Lab) Release() error {
 		if err == nil && publishResponse.StatusCode == 200 {
 			url1 := fmt.Sprintf("https://gitlab.cdek.ru/FrontDev/mm-pliugin-video/-/package_files/%d/download", publishedFile.ID)
 			fmt.Println(url1)
-			url2 := fmt.Sprintf("https://gitlab.cdek.ru%s", publishedFile.File.URL)
+			url2 := gitlabURL + publishedFile.File.URL
 			fmt.Println(url2)
-			linkType := gitlab.PackageLinkType
 			bundleLink := &gitlab.ReleaseAssetLinkOptions{
 				Name:     gitlab.String("get bundle"),
-				URL:      gitlab.String(url1),
-				LinkType: (*gitlab.LinkTypeValue)(&linkType),
+				URL:      gitlab.String(url2),
+				LinkType: gitlab.LinkType(gitlab.PackageLinkType),
 			}
+			year, month, day := time.Now().Date()
+			releaseName := fmt.Sprintf("Released on %v %d, %d", month, day, year)
 			release, releaseResponse, err := git.Releases.CreateRelease(
 				gitlabProjectID,
 				&gitlab.CreateReleaseOptions{
 					Ref:         gitlab.String("master"), // It can be a commit SHA, another tag name, or a branch name.
-					Name:        gitlab.String("q"),
-					TagName:     gitlab.String("beta"),
+					Name:        gitlab.String(releaseName),
+					TagName:     gitlab.String("v" + pluginSettings.Version),
 					TagMessage:  gitlab.String(""),
 					Description: gitlab.String("no description provided (for quick releases)"),
 					ReleasedAt:  gitlab.Time(time.Now()),
@@ -227,7 +228,7 @@ func Compile() error {
 	os.MkdirAll("dist/webapp", 0755)
 
 	for tag := range pluginSettings.Server.Executables {
-		fmt.Println("making", tag, "...")
+		fmt.Println("making server executable for", tag, "...")
 		splitted := strings.Split(tag, "-")
 		output := fmt.Sprintf("../dist/%s/server/plugin-%s", pluginSettings.Id, tag)
 		cmd := exec.Command("go", "build", "-trimpath", "-o", output)

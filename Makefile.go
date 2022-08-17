@@ -59,14 +59,16 @@ func init() {
 func (Lab) Release() error {
 	git, err := gitlab.NewClient(gitlabToken, gitlab.WithBaseURL(gitlabURL+"/api/v4"))
 	if err == nil {
-		// https://gitlab.com/gitlab-org/release-cli/-/tree/master/docs/examples/release-assets-as-generic-package
-		// https://gitlab.cdek.ru/help/user/packages/generic_packages/index.md#publish-a-package-file
-		// https://pkg.go.dev/github.com/xanzy/go-gitlab#Client.UploadRequest
-		packages, listPackagesResponse, err := git.Packages.ListProjectPackages(gitlabProjectID, &gitlab.ListProjectPackagesOptions{})
+		project, projectResponse, err := git.Projects.GetProject(gitlabProjectID, &gitlab.GetProjectOptions{})
+		if err != nil || projectResponse.StatusCode != 200 {
+			fmt.Println(projectResponse.Status)
+			return err
+		}
+		packages, listPackagesResponse, err := git.Packages.ListProjectPackages(project.ID, &gitlab.ListProjectPackagesOptions{})
 		if err == nil && listPackagesResponse.StatusCode == 200 {
 			for i := range packages {
 				fmt.Println("Checking package", packages[i].Name, "...")
-				packageFiles, listFilesResponse, err := git.Packages.ListPackageFiles(gitlabProjectID, packages[i].ID, &gitlab.ListPackageFilesOptions{})
+				packageFiles, listFilesResponse, err := git.Packages.ListPackageFiles(project.ID, packages[i].ID, &gitlab.ListPackageFilesOptions{})
 				if err == nil && listFilesResponse.StatusCode == 200 {
 					for i := range packageFiles {
 						fmt.Println(packageFiles[i].PackageID, packageFiles[i].ID, packageFiles[i].FileName)
@@ -87,7 +89,7 @@ func (Lab) Release() error {
 			fmt.Println(err.Error())
 		}
 		publishedFile, publishResponse, err := git.GenericPackages.PublishPackageFile(
-			gitlabProjectID,
+			project.ID,
 			"Releases",
 			pluginSettings.Version,
 			bundleName,
@@ -98,7 +100,7 @@ func (Lab) Release() error {
 			},
 		)
 		if err == nil && publishResponse.StatusCode == 200 {
-			url1 := fmt.Sprintf("https://gitlab.cdek.ru/FrontDev/mm-pliugin-video/-/package_files/%d/download", publishedFile.ID)
+			url1 := fmt.Sprintf("%s/-/package_files/%d/download", project.WebURL, publishedFile.ID)
 			fmt.Println(url1)
 			url2 := gitlabURL + publishedFile.File.URL
 			fmt.Println(url2)
@@ -110,7 +112,7 @@ func (Lab) Release() error {
 			year, month, day := time.Now().Date()
 			releaseName := fmt.Sprintf("Released on %v %d, %d", month, day, year)
 			release, releaseResponse, err := git.Releases.CreateRelease(
-				gitlabProjectID,
+				project.ID,
 				&gitlab.CreateReleaseOptions{
 					Ref:         gitlab.String("master"), // It can be a commit SHA, another tag name, or a branch name.
 					Name:        gitlab.String(releaseName),

@@ -17,9 +17,10 @@ sudo tar -C /usr/local/go/bin -xzf mage_1.13.0_Linux-64bit.tar.gz
 rm mage_1.13.0_Linux-64bit.tar.gz
 ```
 
-To use it, run `mage build` and `mage deploy`.
-To build static executable, run `mage -compile make`.
-To execute build and deploy in one go with static executable, use `./make install`.
+To use it, run `mage build` and `mage deploy`.  
+To build static executable, run `mage -compile make`.  
+To execute build and deploy in one go with static executable, use `./make install`.  
+Note that `deploy`, `install`, and `hub:release`, `lab:release` commands require you to fill ./servers.json.  
 
 --- To set up Node.js
 

@@ -1,3 +1,10 @@
+# Mattermost plugin for LiveKit
+
+This [Mattermost](https://github.com/mattermost/mattermost-server) plug-in provides integration with the [LiveKit](https://github.com/livekit/livekit) audio- and video-conferencing server.
+
+## Settings
+
+## Installation guide
 --- For using Makefile.go, install mage:
 
 ```Shell

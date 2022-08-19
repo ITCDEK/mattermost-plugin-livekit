@@ -2,9 +2,12 @@
 
 This [Mattermost](https://github.com/mattermost/mattermost-server) plug-in provides integration with the [LiveKit](https://github.com/livekit/livekit) audio- and video-conferencing server.
 
-## Settings
-
 ## Installation guide
+
+Go to the Releases section and download file named `com.mattermost.plugin-livekit-0.x.x.tar.gz`. Then upload this bundle using System console GUI on your Mattermost server.
+As of now, these two settings will get you going: `Host` (ie. livekit.myhost.org) and `Host port` (that's 7880 by default).
+
+## Developer's guide
 --- For using Makefile.go, install mage:
 
 ```Shell

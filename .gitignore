@@ -12,3 +12,6 @@ dist/
 #Mage files
 make
 make.exe
+
+#Secrets
+servers.json

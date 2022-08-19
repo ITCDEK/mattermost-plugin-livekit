@@ -4,6 +4,8 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,9 +18,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/go-github/v45/github"
 	"github.com/magefile/mage/mg"
 	"github.com/magefile/mage/sh"
 	gitlab "github.com/xanzy/go-gitlab"
+	"golang.org/x/oauth2"
 
 	"github.com/mattermost/mattermost-server/v6/model"
 )
@@ -26,20 +30,27 @@ import (
 //To use this, unpack from https://github.com/magefile/mage/releases to $GOPATH/bin
 //To build a static binary, run 'mage -compile make.exe'
 
+type serverCredentials struct {
+	URL         string
+	AccessToken string
+	ID          interface{}
+}
+
+type serverConfigurations struct {
+	Mattermost serverCredentials
+	GitHub     serverCredentials
+	GitLab     serverCredentials
+}
+
 var Default = Compile
 var pluginSettings model.Manifest
-var gitlabURL string
-var gitlabToken string
-var gitlabProjectID int
+var configuration serverConfigurations
 var bundleName string
 
 type Hub mg.Namespace
 type Lab mg.Namespace
 
 func init() {
-	gitlabURL = "https://gitlab.cdek.ru"
-	gitlabToken = "glpat-AxBBC5XZJDdPZn9Ekv_T"
-	gitlabProjectID = 1809
 	jsonFile, err := os.Open("plugin.json")
 	defer jsonFile.Close()
 	if err == nil {
@@ -54,12 +65,102 @@ func init() {
 	} else {
 		fmt.Println("plugin.json fail:", err.Error())
 	}
+	jsonFile, err = os.Open("servers.json")
+	if err == nil {
+		defer jsonFile.Close()
+		jsonData, err := ioutil.ReadAll(jsonFile)
+		if err == nil {
+			err = json.Unmarshal(jsonData, &configuration)
+		}
+	} else {
+		if err.Error() == "open servers.json: no such file or directory" {
+			fmt.Println("servers.json not found...")
+			srv := serverCredentials{URL: "https://", ID: "n\\a", AccessToken: "n\\a"}
+			cfg := serverConfigurations{Mattermost: srv, GitHub: srv, GitLab: srv}
+			jsonData, _ := json.Marshal(cfg)
+			pretty := &bytes.Buffer{}
+			json.Indent(pretty, jsonData, "", "   ")
+			err = ioutil.WriteFile("servers.json", pretty.Bytes(), os.ModePerm)
+			if err == nil {
+				fmt.Println("servers.json created")
+			} else {
+				fmt.Println(err)
+			}
+		}
+	}
+}
+
+func (Hub) Release() error {
+	ctx := context.Background()
+	splitted := strings.Split(configuration.GitHub.ID.(string), "/")
+	owner := splitted[0]
+	repo := splitted[1]
+	ts := oauth2.StaticTokenSource(
+		&oauth2.Token{AccessToken: configuration.GitHub.AccessToken},
+	)
+	tc := oauth2.NewClient(ctx, ts)
+
+	client := github.NewClient(tc)
+	fmt.Println(client.BaseURL.User)
+	releases, listResponse, err := client.Repositories.ListReleases(ctx, owner, repo, &github.ListOptions{})
+	if err == nil {
+		for i := range releases {
+			fmt.Println("Checking release", *releases[i].ID)
+			assets, assetsResponse, err := client.Repositories.ListReleaseAssets(ctx, owner, repo, *releases[i].ID, &github.ListOptions{})
+			if err == nil {
+				for i := range assets {
+					fmt.Println(*assets[i].Name)
+				}
+			} else {
+				fmt.Println(assetsResponse.Status)
+			}
+		}
+	} else {
+		fmt.Println(listResponse.Status)
+		return err
+	}
+	year, month, day := time.Now().Date()
+	releaseName := fmt.Sprintf("Released on %v %d, %d", month, day, year)
+	release := &github.RepositoryRelease{
+		TagName:              github.String("v" + pluginSettings.Version),
+		Name:                 github.String(releaseName),
+		Body:                 github.String("no description provided (for quick releases)"),
+		GenerateReleaseNotes: github.Bool(false),
+	}
+	createdRelease, releaseResponse, err := client.Repositories.CreateRelease(ctx, owner, repo, release)
+	if err == nil {
+		fmt.Println("Release created: id =", *createdRelease.ID, ", name =", *createdRelease.Name)
+		fmt.Printf("Uploading bundle %s ...", bundleName)
+		bundleFile, err := os.Open("./dist/" + bundleName)
+		if err == nil {
+			defer bundleFile.Close()
+		} else {
+			fmt.Println(err.Error())
+			return err
+		}
+		uploadedAsset, uploadResponse, err := client.Repositories.UploadReleaseAsset(
+			ctx, owner, repo, *createdRelease.ID,
+			&github.UploadOptions{Name: bundleName},
+			bundleFile,
+		)
+		if err == nil {
+			fmt.Printf("Ok\nnew url: %s\n", *uploadedAsset.URL)
+			return nil
+		} else {
+			fmt.Printf("fail!\n")
+			fmt.Println(uploadResponse.Status)
+			return err
+		}
+	} else {
+		fmt.Println(releaseResponse.Status)
+	}
+	return err
 }
 
 func (Lab) Release() error {
-	git, err := gitlab.NewClient(gitlabToken, gitlab.WithBaseURL(gitlabURL+"/api/v4"))
+	git, err := gitlab.NewClient(configuration.GitLab.AccessToken, gitlab.WithBaseURL(configuration.GitLab.URL+"/api/v4"))
 	if err == nil {
-		project, projectResponse, err := git.Projects.GetProject(gitlabProjectID, &gitlab.GetProjectOptions{})
+		project, projectResponse, err := git.Projects.GetProject(configuration.GitLab.ID, &gitlab.GetProjectOptions{})
 		if err != nil || projectResponse.StatusCode != 200 {
 			fmt.Println(projectResponse.Status)
 			return err
@@ -102,7 +203,7 @@ func (Lab) Release() error {
 		if err == nil && publishResponse.StatusCode == 200 {
 			url1 := fmt.Sprintf("%s/-/package_files/%d/download", project.WebURL, publishedFile.ID)
 			fmt.Println(url1)
-			url2 := gitlabURL + publishedFile.File.URL
+			url2 := configuration.GitLab.URL + publishedFile.File.URL
 			fmt.Println(url2)
 			bundleLink := &gitlab.ReleaseAssetLinkOptions{
 				Name:     gitlab.String("get bundle"),
@@ -140,7 +241,7 @@ func (Lab) Release() error {
 }
 
 func (Lab) ListProjects() error {
-	git, err := gitlab.NewClient(gitlabToken, gitlab.WithBaseURL(gitlabURL))
+	git, err := gitlab.NewClient(configuration.GitLab.AccessToken, gitlab.WithBaseURL(configuration.GitLab.URL))
 	if err == nil {
 		name := "video"
 		fmt.Println("Searching GitLab for", name, "...")
@@ -164,22 +265,10 @@ func Install() error {
 }
 
 func Deploy() error {
-	// mg.Deps(Build)
-	// siteURL := os.Getenv("MM_SITEURL")
-	// adminToken := os.Getenv("MM_ADMIN_TOKEN")
-	adminUsername := "Denis"
-	adminPassword := "##332211qqwweE"
-	siteURL := "https://dev-talk.cdek.ru"
-	client := model.NewAPIv4Client(siteURL)
-	// client.SetToken(adminToken)
-	fmt.Printf("Authenticating as %s against %s: ", adminUsername, siteURL)
-	_, _, err := client.Login(adminUsername, adminPassword)
-	if err == nil {
-		fmt.Printf("Ok\n")
-	} else {
-		fmt.Printf("fail!\n")
-		return err
-	}
+	fmt.Printf("Deploying to %s: \n", configuration.Mattermost.URL)
+	client := model.NewAPIv4Client(configuration.Mattermost.URL)
+	client.SetToken(configuration.Mattermost.AccessToken)
+	// _, _, err := client.Login(adminUsername, adminPassword)
 	bundlePath := fmt.Sprintf("./dist/%s", bundleName)
 	pluginBundle, err := os.Open(bundlePath)
 	if err != nil {

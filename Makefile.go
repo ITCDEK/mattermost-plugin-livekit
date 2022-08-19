@@ -129,7 +129,7 @@ func (Hub) Release() error {
 	}
 	createdRelease, releaseResponse, err := client.Repositories.CreateRelease(ctx, owner, repo, release)
 	if err == nil {
-		fmt.Println("Release created: id =", *createdRelease.ID, ", name =", *createdRelease.Name)
+		fmt.Println("New release created: id =", *createdRelease.ID, ", name =", *createdRelease.Name)
 		fmt.Printf("Uploading bundle %s ...", bundleName)
 		bundleFile, err := os.Open("./dist/" + bundleName)
 		if err == nil {

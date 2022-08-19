@@ -1,0 +1,17 @@
+dist/
+
+# Mac
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Jetbrains
+.idea/
+
+#Mage files
+make
+make.exe
+
+#Secrets
+servers.json

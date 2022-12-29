@@ -46,6 +46,7 @@ var Default = Compile
 var pluginSettings model.Manifest
 var configuration serverConfigurations
 var bundleName string
+var standaloneName string
 
 type Hub mg.Namespace
 type Lab mg.Namespace
@@ -62,6 +63,7 @@ func init() {
 	if err == nil {
 		fmt.Println("Settings for plugin <", pluginSettings.Id, "> loaded")
 		bundleName = fmt.Sprintf("%s-%s.tar.gz", pluginSettings.Id, pluginSettings.Version)
+		standaloneName = fmt.Sprintf("%s-%s-standalone.tar.gz", pluginSettings.Id, pluginSettings.Version)
 	} else {
 		fmt.Println("plugin.json fail:", err.Error())
 	}
@@ -73,19 +75,17 @@ func init() {
 			err = json.Unmarshal(jsonData, &configuration)
 		}
 	} else {
-		if err.Error() == "open servers.json: no such file or directory" {
-			fmt.Println("servers.json not found...")
-			srv := serverCredentials{URL: "https://", ID: "n\\a", AccessToken: "n\\a"}
-			cfg := serverConfigurations{Mattermost: srv, GitHub: srv, GitLab: srv}
-			jsonData, _ := json.Marshal(cfg)
-			pretty := &bytes.Buffer{}
-			json.Indent(pretty, jsonData, "", "   ")
-			err = ioutil.WriteFile("servers.json", pretty.Bytes(), os.ModePerm)
-			if err == nil {
-				fmt.Println("servers.json created")
-			} else {
-				fmt.Println(err)
-			}
+		fmt.Println("servers.json not found...")
+		srv := serverCredentials{URL: "https://", ID: "n\\a", AccessToken: "n\\a"}
+		cfg := serverConfigurations{Mattermost: srv, GitHub: srv, GitLab: srv}
+		jsonData, _ := json.Marshal(cfg)
+		pretty := &bytes.Buffer{}
+		json.Indent(pretty, jsonData, "", "   ")
+		err = ioutil.WriteFile("servers.json", pretty.Bytes(), os.ModePerm)
+		if err == nil {
+			fmt.Println("servers.json created")
+		} else {
+			fmt.Println(err)
 		}
 	}
 }
@@ -240,6 +240,66 @@ func (Lab) Release() error {
 	return err
 }
 
+func (Lab) Standalone() error {
+	output := fmt.Sprintf("../dist/standalone/readonly_channels-%s", pluginSettings.Version)
+	cmd := exec.Command("go", "build", "-trimpath", "-o", output)
+	cmd.Env = []string{
+		"GOOS=linux",
+		"GOARCH=amd64",
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
+		"GOPATH=" + os.Getenv("GOPATH"),
+		// "GO111MODULE=on",
+	}
+	if runtime.GOOS == "windows" {
+		cmd.Env = append(cmd.Env,
+			"GOCACHE="+os.Getenv("LOCALAPPDATA")+"\\go-build",
+			"GOTMPDIR="+os.Getenv("LOCALAPPDATA")+"\\Temp",
+		)
+	}
+	cmd.Dir = "./standalone"
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	err := run("./dist/standalone", "tar", "-cvzf", "../"+standaloneName, "readonly_channels-"+pluginSettings.Version)
+	git, err := gitlab.NewClient(configuration.GitLab.AccessToken, gitlab.WithBaseURL(configuration.GitLab.URL+"/api/v4"))
+	if err == nil {
+		pidCast := configuration.GitLab.ID.(float64)
+		project, projectResponse, err := git.Projects.GetProject(int(pidCast), &gitlab.GetProjectOptions{})
+		if err != nil {
+			fmt.Println(projectResponse.Status)
+			return err
+		}
+		fmt.Println("GitLab project", project.NameWithNamespace, "obtained")
+		fmt.Println("Uploading package", standaloneName)
+		bundleFile, err := os.Open("./dist/" + standaloneName)
+		defer bundleFile.Close()
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		publishedFile, publishResponse, err := git.GenericPackages.PublishPackageFile(
+			project.ID,
+			"Releases",
+			pluginSettings.Version,
+			standaloneName,
+			bundleFile,
+			&gitlab.PublishPackageFileOptions{
+				Select: gitlab.GenericPackageSelect(gitlab.SelectPackageFile),
+				Status: gitlab.GenericPackageStatus(gitlab.PackageDefault),
+			},
+		)
+		if err == nil {
+			fmt.Println(publishedFile.ID)
+		} else {
+			fmt.Println(publishResponse.Status)
+			return err
+		}
+	}
+	return err
+}
+
 func (Lab) ListProjects() error {
 	git, err := gitlab.NewClient(configuration.GitLab.AccessToken, gitlab.WithBaseURL(configuration.GitLab.URL))
 	if err == nil {
@@ -262,6 +322,33 @@ func Install() error {
 		return Deploy()
 	}
 	return err
+}
+
+func Logs() error {
+	fmt.Printf("Listing logs from %s with <%s> substring: \n", configuration.Mattermost.URL, pluginSettings.Id)
+	client := model.NewAPIv4Client(configuration.Mattermost.URL)
+	client.SetToken(configuration.Mattermost.AccessToken)
+	logsPerPage := 1000
+	for i := 0; i < 100; i++ {
+		fmt.Printf("Getting page %d: ", i)
+		page, pageResponse, err := client.GetLogs(i, logsPerPage)
+		if err == nil {
+			fmt.Printf("%d \n", pageResponse.StatusCode)
+			for j := range page {
+				found := strings.Contains(page[j], pluginSettings.Id)
+				if found {
+					fmt.Println(page[j])
+				}
+			}
+			if len(page) < logsPerPage {
+				fmt.Println("Breaking at", i)
+				continue
+			}
+		} else {
+			fmt.Printf("%s \n", err.Error())
+		}
+	}
+	return nil
 }
 
 func Deploy() error {
@@ -343,17 +430,16 @@ func Compile() error {
 		if err := cmd.Run(); err != nil {
 			return err
 		}
+		//Windows fix for setting executable bit
+		if runtime.GOOS == "windows" {
+			err := run(cmd.Dir, "git", "update-index", "--chmod=+x", output)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	cmd := exec.Command("npm", "run", "build")
-	cmd.Dir = "./webapp"
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-
-	return sh.Run("go", "version")
+	return run("./webapp", "npm", "run", "build")
 }
 
 func SetUp() error {
@@ -387,7 +473,8 @@ func download(url string, path []string) error {
 
 func copyFile(src, dst string) error {
 	if runtime.GOOS == "windows" {
-		return run(".", "copy", src, dst)
+		var do = strings.NewReplacer("/", "\\")
+		return run(".", "cmd", "/C", "copy", do.Replace(src), do.Replace(dst))
 	} else {
 		return run(".", "cp", src, dst)
 	}
@@ -396,7 +483,9 @@ func copyFile(src, dst string) error {
 func copyDir(src, dst string) error {
 	var err error
 	if runtime.GOOS == "windows" {
-		err = run(".", "copy", src, dst)
+		var do = strings.NewReplacer("/", "\\")
+		dst = dst + "/" + src
+		err = run(".", "cmd", "/C", "xcopy", "/I", do.Replace(src), do.Replace(dst))
 	} else {
 		err = run(".", "cp", "-r", src, dst)
 	}
@@ -407,6 +496,7 @@ func run(dir, exe string, args ...string) error {
 	cmd := exec.Command(exe, args...)
 	cmd.Env = []string{
 		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + os.Getenv("HOME"),
 	}
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
